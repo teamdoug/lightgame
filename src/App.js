@@ -171,6 +171,7 @@ class App extends React.Component {
     let pRad = star.particleRadius;
 
     let [w, h] = [canvas.width, canvas.height];
+    let [cx, cy] = [w / 2, h / 2];
     const ctx = canvas.getContext("2d", { alpha: false });
     ctx.fillStyle = "#575757";
     ctx.fillRect(0, 0, w, h);
@@ -197,27 +198,35 @@ class App extends React.Component {
       gridY += gridSpacing;
     }
 
-    ctx.strokeStyle = "#ee3";
+    ctx.strokeStyle = "#dd3";
     ctx.beginPath();
-    ctx.arc(w / 2, h / 2, star.starRadius, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, star.starRadius, 0, 2 * Math.PI);
     ctx.stroke();
     ctx.strokeStyle = "#bbb";
     for (const particle of field.particles) {
       if (
-        particle.x < -w / 2 - pRad ||
-        particle.x > w / 2 + pRad ||
-        particle.y < -h / 2 - pRad ||
-        particle.y > h / 2 + pRad
+        particle.x < -cx - pRad ||
+        particle.x > cx + pRad ||
+        particle.y < -cy - pRad ||
+        particle.y > cy + pRad
       ) {
         continue;
       }
       ctx.beginPath();
-      ctx.arc(particle.x + w / 2, particle.y + h / 2, pRad, 0, 2 * Math.PI);
+      ctx.arc(particle.x + cx, particle.y + cy, pRad, 0, 2 * Math.PI);
       ctx.stroke();
     }
+    ctx.strokeStyle = "#ff4";
     for (const photon of field.photons) {
+      if (photon.x < -cx || photon.x > cx || photon.y < -cy || photon.y > cy) {
+        continue;
+      }
       ctx.beginPath();
-      ctx.arc(photon.x + w / 2, photon.y + h / 2, pRad, 0, 2 * Math.PI);
+      ctx.moveTo(photon.x + cx, photon.y + cy);
+      ctx.lineTo(
+        photon.x + cx + photon.vx / 50,
+        photon.y + cy + photon.vy / 50
+      );
       ctx.stroke();
     }
   };
@@ -291,6 +300,7 @@ class App extends React.Component {
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
       ];
+      let [rightEdge, bottomEdge] = [-leftEdge, -topEdge];
       let gConstant = 10000 * star.starMass;
       let newMass = star.starMass;
       let newRadius = star.starRadius;
@@ -310,13 +320,12 @@ class App extends React.Component {
           vy += ((190 * this.mouseY) / dist / scale) * relDelta;
           velocity = (vx * vx + vy * vy) ** 0.5;
           if (velocity > velocityCap) {
-              vx *= velocityCap/velocity;
-              vy *= velocityCap/velocity;
-              velocity = velocityCap;
+            vx *= velocityCap / velocity;
+            vy *= velocityCap / velocity;
+            velocity = velocityCap;
           }
         }
       }
-let deathCount = 0;
       for (let p of this.fields[index].particles) {
         let distSq = p.x * p.x + p.y * p.y;
         let dist = distSq ** 0.5;
@@ -332,24 +341,45 @@ let deathCount = 0;
         p.x += (p.vx - vx) * relDelta;
         p.y += (p.vy - vy) * relDelta;
         if (
-          (p.x > -leftEdge && (p.vx - vx) > 0) ||
-          (p.x < leftEdge && (p.vx - vx) < 0) ||
-          (p.y > -topEdge && (p.vy - vy) > 0) ||
-          (p.y < topEdge && (p.vy - vy) < 0)
+          (p.x > rightEdge && p.vx - vx > 0) ||
+          (p.x < leftEdge && p.vx - vx < 0) ||
+          (p.y > bottomEdge && p.vy - vy > 0) ||
+          (p.y < topEdge && p.vy - vy < 0)
         ) {
-          deathCount += 1;
           this.genParticle(star, true, p);
         }
         if (
           p.x * p.x + p.y * p.y <
           (star.particleRadius + star.starRadius) ** 2
         ) {
+          this.fields[index].photons.push({
+            x: (newRadius * p.x) / dist,
+            y: (newRadius * p.y) / dist,
+            vx: (400 * p.x) / dist,
+            vy: (400 * p.y) / dist,
+          });
           this.genParticle(star, true, p);
           newMass += star.particleMass;
           newRadius = (newRadius ** 3 + star.particleRadius ** 3) ** (1 / 3);
           newPhotons += star.particlePhotons;
         }
       }
+      let newDrawPhotons = [];
+      for (let p of this.fields[index].photons) {
+        p.x += p.vx * relDelta;
+        p.y += p.vy * relDelta;
+        if (
+          p.x < leftEdge ||
+          p.x > rightEdge ||
+          p.y < topEdge ||
+          p.y > bottomEdge
+        ) {
+          continue;
+        }
+        newDrawPhotons.push(p);
+      }
+      this.fields[index].photons = newDrawPhotons;
+
       updates.stars.push({
         ...star,
         starMass: newMass,
