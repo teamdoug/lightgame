@@ -14,46 +14,67 @@ class App extends React.Component {
     const storedState = localStorage.getItem("save");
     if (false && storedState) {
       this.state = JSON.parse(storedState);
-      this.state.field = this.getInitField();
     } else {
       this.state = this.getInitState();
-      this.state.field = this.getInitField();
+    }
+    this.fields = [];
+    for (let star of this.state.stars) {
+      this.fields.push(this.getInitField(star));
     }
     window.addEventListener("beforeunload", this.save);
     window.addEventListener("resize", this.resizeCanvas);
   }
 
   getInitState = () => {
-    return {
+    let state = {
+      paused: false,
+      stars: [this.getInitStar()],
+    };
+    return state;
+  };
+
+  getInitStar = () => {
+    let star = {
       photons: 0,
       starMass: 10,
       starRadius: 20,
-      particleMass: 1,
-      particleRadius: 10,
+      particleMass: 0.2,
+      particleRadius: 5,
+      particleCount: 1000,
       particlePhotons: 1,
     };
+    return star;
   };
 
-  getInitField = () => {
+  getInitField = (star) => {
     return {
-      particles: [...Array(1000).keys()].map(() => this.genParticle(false)),
+      particles: [...Array(star.particleCount).keys()].map(() =>
+        this.genParticle(star, false)
+      ),
     };
   };
 
   render() {
     let s = this.state;
+    let star = s.stars[0];
+    let field = this.fields[0];
     const canvas = this.canvas.current;
     if (canvas !== null) {
-      this.drawCanvas(canvas);
+      this.drawCanvas(canvas, star, field);
     }
 
     return (
       <div id="verticalFlex">
-        <h2 className="header">{s.photons} photons</h2>
+        <h2 className="header">
+          {star.photons} photons
+          <button onClick={this.togglePause}>
+            {s.paused ? "Resume" : "Pause"}
+          </button>
+        </h2>
 
         <div id="flex">
           <div className="panel" id="leftPanel">
-            Mass: {s.starMass}
+            Mass: {star.starMass}
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
             <canvas ref={this.canvas}></canvas>
@@ -64,43 +85,40 @@ class App extends React.Component {
     );
   }
 
-  genParticle = (offScreen) => {
-    let pRad = this.state.particleRadius;
-    let x, y, vx, vy;
+  genParticle = (star, offScreen, existing) => {
+    let pRad = star.particleRadius;
+    if (existing === undefined) {
+      existing = {};
+    }
     if (offScreen) {
       let offVertical = getRandomInt(2) === 0;
       let topLeft = getRandomInt(2) === 0;
       if (offVertical) {
-        x = getRandomInt(maxWidth) - maxWidth / 2;
-        vx = this.getRandomVelocity(false) * (x > 0 ? -1 : 1);
-        vy = -this.getRandomVelocity(false);
-        y = maxWidth / 2 - pRad;
+        existing.x = getRandomInt(maxWidth) - maxWidth / 2;
+        existing.vx = this.getRandomVelocity(false) * (existing.x > 0 ? -1 : 1);
+        existing.vy = -this.getRandomVelocity(false);
+        existing.y = maxWidth / 2 - pRad;
         if (topLeft) {
-          y = -y;
-          vy = -vy;
+          existing.y = -existing.y;
+          existing.vy = -existing.vy;
         }
       } else {
-        y = getRandomInt(maxHeight) - maxHeight / 2;
-        x = maxHeight / 2 - pRad;
-        vy = this.getRandomVelocity(false) * (y > 0 ? -1 : 1);
-        vx = -this.getRandomVelocity(false);
+        existing.y = getRandomInt(maxHeight) - maxHeight / 2;
+        existing.x = maxHeight / 2 - pRad;
+        existing.vy = this.getRandomVelocity(false) * (existing.y > 0 ? -1 : 1);
+        existing.vx = -this.getRandomVelocity(false);
         if (topLeft) {
-          x = -x;
-          vx = -vx;
+          existing.x = -existing.x;
+          existing.vx = -existing.vx;
         }
       }
     } else {
-      x = getRandomInt(maxWidth) - maxWidth / 2;
-      y = getRandomInt(maxHeight) - maxHeight / 2;
-      vx = this.getRandomVelocity(true);
-      vy = this.getRandomVelocity(true);
+      existing.x = getRandomInt(maxWidth) - maxWidth / 2;
+      existing.y = getRandomInt(maxHeight) - maxHeight / 2;
+      existing.vx = this.getRandomVelocity(true);
+      existing.vy = this.getRandomVelocity(true);
     }
-    return {
-      x,
-      y,
-      vx,
-      vy,
-    };
+    return existing;
   };
 
   getRandomVelocity = (allowNegative) => {
@@ -111,7 +129,7 @@ class App extends React.Component {
     return vel;
   };
 
-  drawCanvas = (canvas) => {
+  drawCanvas = (canvas, star, field) => {
     let s = this.state;
     let pRad = s.particleRadius;
     let [w, h] = [canvas.width, canvas.height];
@@ -119,9 +137,9 @@ class App extends React.Component {
     ctx.clearRect(0, 0, w, h);
     ctx.beginPath();
     ctx.strokeStyle = "#ee3";
-    ctx.arc(w / 2, h / 2, s.starRadius, 0, 2 * Math.PI);
+    ctx.arc(w / 2, h / 2, star.starRadius, 0, 2 * Math.PI);
     ctx.stroke();
-    for (const particle of s.field.particles) {
+    for (const particle of field.particles) {
       let { x, y } = particle;
       if (
         x < -w / 2 - pRad ||
@@ -158,12 +176,13 @@ class App extends React.Component {
       } else {
         this.canvas.current.height = this.canvas.current.offsetHeight;
       }
+      this.forceUpdate();
     }
   };
 
   componentDidMount() {
-    this.renderID = window.requestAnimationFrame(this.gameLoop);
     this.resizeCanvas();
+    this.renderID = window.requestAnimationFrame(this.gameLoop);
   }
 
   componentWillUnmount() {
@@ -184,57 +203,72 @@ class App extends React.Component {
     let minDelta = 1000 / 60;
     while (delta > minDelta) {
       delta -= minDelta;
+      if (this.state.paused) {
+        continue;
+      }
       this.update(minDelta);
     }
     this.lastFrame = tFrame - delta;
     this.renderID = window.requestAnimationFrame(this.gameLoop);
   };
 
+  togglePause = () => {
+    this.setState({ paused: !this.state.paused });
+  };
+
   update = (delta) => {
     let relDelta = delta / 1000;
     let s = this.state;
-    let updates = {};
-    let [leftEdge, topEdge] = [
-      -maxWidth / 2 - s.particleRadius,
-      -maxHeight / 2 - s.particleRadius,
-    ];
-    let newMass = s.starMass;
-    let newRadius = s.starRadius;
-    let newPhotons = s.photons;
-    let gConstant = 10000 * s.starMass;
-    const drag = .0005;
-    for (let p of s.field.particles) {
-      let distSq = p.x * p.x + p.y * p.y;
-      let dist = Math.sqrt(distSq);
-      let gravX = ((-gConstant / distSq) * p.x) / dist;
-      let gravY = ((-gConstant / distSq) * p.y) / dist;
-      let vMag = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      let dragX = (-drag * p.vx * p.vx * p.vx) / vMag;
-      let dragY = (-drag * p.vy * p.vy * p.vy) / vMag;
-      p.vx += (gravX + dragX) * relDelta;
-      p.vy += (gravY + dragY) * relDelta;
-      p.x += p.vx * relDelta;
-      p.y += p.vy * relDelta;
-      if (
-        (p.x > -leftEdge && p.vx > 0) ||
-        (p.x < leftEdge && p.vx < 0) ||
-        (p.y > -topEdge && p.vy > 0) ||
-        (p.y < topEdge && p.vy < 0)
-      ) {
-        Object.assign(p, this.genParticle(true));
+    let updates = { stars: [] };
+    for (let [index, star] of this.state.stars.entries()) {
+      let [leftEdge, topEdge] = [
+        -maxWidth / 2 - star.particleRadius,
+        -maxHeight / 2 - star.particleRadius,
+      ];
+      let gConstant = 10000 * star.starMass;
+      const drag = 0.0005;
+      let newMass = star.starMass;
+      let newRadius = star.starRadius;
+      let newPhotons = star.photons;
+      for (const p of this.fields[index].particles) {
+        const distSq = p.x * p.x + p.y * p.y;
+        const dist = Math.sqrt(distSq);
+        const gravX = ((-gConstant / distSq) * p.x) / dist;
+        const gravY = ((-gConstant / distSq) * p.y) / dist;
+        const vMag = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        const dragX = (-drag * p.vx * p.vx * p.vx) / vMag;
+        const dragY = (-drag * p.vy * p.vy * p.vy) / vMag;
+        p.vx += (gravX + dragX) * relDelta;
+        p.vy += (gravY + dragY) * relDelta;
+        p.x += p.vx * relDelta;
+        p.y += p.vy * relDelta;
+        if (
+          (p.x > -leftEdge && p.vx > 0) ||
+          (p.x < leftEdge && p.vx < 0) ||
+          (p.y > -topEdge && p.vy > 0) ||
+          (p.y < topEdge && p.vy < 0)
+        ) {
+          this.genParticle(star, true, p);
+        }
+        if (
+          p.x * p.x + p.y * p.y <
+          (star.particleRadius + star.starRadius) ** 2
+        ) {
+          this.genParticle(star, true, p);
+          newMass += star.particleMass;
+          newRadius = (newRadius ** 3 + star.particleRadius ** 3) ** (1 / 3);
+          newPhotons += star.particlePhotons;
+        }
       }
-      if (p.x * p.x + p.y * p.y < (s.particleRadius + s.starRadius) ** 2) {
-        Object.assign(p, this.genParticle(true));
-        newMass += s.particleMass;
-        newRadius = (newRadius ** 3 + s.particleRadius ** 3) ** (1 / 3);
-        newPhotons += s.particlePhotons;
-      }
+      updates.stars.push({
+        ...star,
+        starMass: newMass,
+        starRadius: newRadius,
+        photons: newPhotons,
+      });
     }
-    updates.field = s.field;
-    updates.starMass = newMass;
-    updates.starRadius = newRadius;
-    updates.photons = newPhotons;
     this.setState(updates);
+    this.forceUpdate();
   };
 }
 
