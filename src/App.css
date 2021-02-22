@@ -2,25 +2,56 @@ html,
 body {
   background-color: #333;
   color: #ddd;
+  overflow: hidden;
 }
 
-#game {
+#verticalFlex {
   display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 5px;
+  margin: 0px;
 }
 
-#leftP {
-  min-width: 140px;
+.header {
+  height: 25px;
+  margin: 20px 0px;
+}
+#flex {
+  display: flex;
+  flex-direction: row;
+  height: calc(100% - 35px);
+  flex-grow: 1;
 }
 
 .panel {
   background-color: rgb(87, 87, 87);
-  margin: 5px;
-  padding: 5px;
+  /*min-height: 100%;*/
+  
 }
 
-#rightP {
+#leftPanel {
+  flex-basis: 20%;
+  margin-right: 10px;
+  padding: 5px;
+  min-height: calc(100vh - 117px);
+  max-height: calc(100vh - 117px);
+}
+
+#mainPanel {
   flex-grow: 5;
-  max-width: 800px;
+  flex-basis: 80%;
+  padding: 0px;
+  min-height: calc(100vh - 107px);
+  max-height: calc(100vh - 107px);
+}
+
+.progress {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  width: 100%;
+  height: 21px;
+  background-color: rgb(87, 87, 87);
 }
 
 .list {
