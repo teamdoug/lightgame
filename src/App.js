@@ -1,14 +1,16 @@
 import "./App.css";
 import React from "react";
 
-const maxWidth = 3000;
-const maxHeight = 3000;
+const maxWidth = 2000;
+const maxHeight = 1500;
 const gridSpacing = 200;
 const velocityCap = 400;
 const accelerationCap = 300;
-const gravity = .2;
+const gravity = 200000;
 const mouseAcceleration = 300;
 const collapseMass = 1e20;
+const yellowCollapseMass = 1e25;
+//const blueCollapseMass = 1e30;
 const starDrag = 1;
 
 class App extends React.Component {
@@ -40,6 +42,23 @@ class App extends React.Component {
     let state = {
       paused: false,
       stars: [this.getInitStar()],
+      logText: ["The universe is dark."],
+      featureTriggers: {
+        firstPhoton: false,
+        tenthPhoton: false,
+      },
+      upgrades: {
+        startingGravity: 0,
+        mouseGravity: 0,
+        permanentMouseGravity: 0,
+        startingMass: 0,
+        startingPhotons: 0,
+        startingParticleCount: 0,
+        startingRadiusFactor: 0,
+        startingParticleRadius: 0,
+        startingParticleMass: 0,
+        startingPhotonCount: 0,
+      },
     };
     return state;
   };
@@ -48,7 +67,7 @@ class App extends React.Component {
     let star = {
       photons: 0,
       starMass: 10,
-      starRadiusFactor: 10,
+      starRadiusFactor: 20,
       particleMass: 0.1,
       particleRadius: 3,
       particleCount: 50,
@@ -58,14 +77,24 @@ class App extends React.Component {
       gridX: 0,
       gridY: 0,
       velocity: 50,
-      mouseGravity: 10000000,
-      mouseDrag: .1,
+      mouseGravity: 1000000,
+      mouseDrag: 0.1,
+      upgrades: {
+        photonCount: 0,
+        particleCount: 0,
+        particleMass: 0,
+        particleRadius: 0,
+        starRadiusFactor: 0,
+        permanentMouseGravity: 0,
+        gravity: 0,
+      },
     };
     return star;
   };
 
   getInitField = (star) => {
     return {
+      colorFrame: 0,
       photons: [],
       particles: [...Array(star.particleCount).keys()].map(() =>
         this.genParticle(star, false)
@@ -74,8 +103,11 @@ class App extends React.Component {
   };
 
   getStarRadius = (star) => {
-    return star.starRadiusFactor * star.starMass ** (1/3)
-  }
+    return (
+      20 +
+      (star.starRadiusFactor * Math.log(star.starMass / 10)) / Math.log(2000000)
+    );
+  };
 
   render() {
     let s = this.state;
@@ -94,26 +126,45 @@ class App extends React.Component {
     return (
       <div id="verticalFlex">
         <h2 className="header">
-          {star.photons} photons
-          <button onClick={this.togglePause}>
+          {s.featureTriggers.firstPhoton && (
+            <>{itoa(star.photons, true)} photons</>
+          )}
+          <div className="button" onClick={this.togglePause}>
             {s.paused ? "Resume" : "Pause"}
-          </button>
+          </div>
+          <div
+            className="button"
+            onClick={() => this.modifyStar(0, "photons", 100)}
+          >
+            Photons
+          </div>
         </h2>
 
         <div id="flex">
           <div className="panel" id="leftPanel">
-            <p>Mass: {star.starMass.toFixed(2)}</p>
+            <p>Mass: {itoa(star.starMass)}</p>
             <p>Velocity: {star.velocity.toFixed(2)}</p>
             <p>
-              <button onClick={() => this.modifyStar(0, "starMass", 100)}>
+              <div
+                className="button"
+                onClick={() => this.modifyStar(0, "starMass", 100)}
+              >
                 Big Mass
-              </button>{" "}
+              </div>{" "}
             </p>
             <p>
-              <button onClick={() => this.modifyStar(0, "starRadiusFactor", 10)}>
+              <div
+                className="button"
+                onClick={() => this.modifyStar(0, "starRadiusFactor", 1.1)}
+              >
                 Big Radius
-              </button>{" "}
+              </div>{" "}
             </p>
+            <div id="log">
+              {s.logText.map((value, index) => (
+                <p key={s.logText.length-index}>{value}</p>
+              ))}
+            </div>
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
             <canvas
@@ -129,16 +180,15 @@ class App extends React.Component {
           <div
             style={{
               width: starProgress + "%",
-              postition: 'absolute',
+              postition: "absolute",
               top: 0,
               left: 0,
               height: "21px",
               backgroundColor: "#151",
             }}
           ></div>
-          <div style={{ position: "absolute", top: 0, left:0 }}>
-            {starProgress.toFixed(2)}% to Stellar Mass (
-            {collapseMass.toExponential(2)})
+          <div style={{ position: "absolute", top: 0, left: 0 }}>
+            {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)})
           </div>
         </div>
       </div>
@@ -147,7 +197,7 @@ class App extends React.Component {
 
   modifyStar = (index, prop, increase) => {
     let star = this.state.stars[index];
-    star[prop] *= increase;
+    star[prop] = star[prop] * increase + 1;
     this.setState({
       stars: this.state.stars.splice(index, 1, star),
     });
@@ -185,6 +235,9 @@ class App extends React.Component {
       existing.y = getRandomInt(maxHeight) - maxHeight / 2;
       existing.vx = this.getRandomVelocity(true);
       existing.vy = this.getRandomVelocity(true);
+      if (existing.x * existing.x + existing.y * existing.y < 10000) {
+        return this.genParticle(star, offScreen, existing);
+      }
     }
     return existing;
   };
@@ -214,6 +267,33 @@ class App extends React.Component {
     }
     return vel;
   };
+
+  getStarColor(mass, colorFrame) {
+    let red, green, blue;
+    if (mass <= collapseMass) {
+      let ratio = Math.log(mass) / Math.log(collapseMass);
+      red = ratio * 87 + 10;
+      green = ratio * 5;
+      blue = ratio * 5;
+    } else if (mass <= yellowCollapseMass) {
+      let ratio = Math.log(mass / collapseMass) / Math.log(yellowCollapseMass);
+      red = ratio * 66 + 97;
+      green = ratio * 129 + 5;
+      blue = ratio * 15 + 5;
+    } else {
+      red = 232;
+      green = 199;
+      blue = 35;
+    }
+    let intensity = colorFrame / 5;
+    if (colorFrame >= 5) {
+      intensity = (10 - colorFrame) / 5;
+    }
+    red = intensity * (red - 10) + 10;
+    blue = intensity * blue;
+    green = intensity * green;
+    return "rgb(" + red + "," + green + "," + blue + ")";
+  }
 
   drawCanvas = (canvas, star, field) => {
     let pRad = star.particleRadius;
@@ -247,7 +327,7 @@ class App extends React.Component {
       gridY += gridSpacing;
     }
 
-    ctx.fillStyle = "#100";
+    ctx.fillStyle = this.getStarColor(star.starMass, field.colorFrame);
     ctx.beginPath();
     ctx.arc(cx, cy, starRadius, 0, 2 * Math.PI);
     ctx.fill();
@@ -352,8 +432,13 @@ class App extends React.Component {
   };
 
   update = (delta, debugFrame) => {
+    let s = this.state;
     let relDelta = delta / 1000;
-    let updates = { stars: [] };
+    let updates = {
+      stars: [],
+      featureTriggers: { ...s.featureTriggers },
+      logText: s.logText,
+    };
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
       let starRadius = this.getStarRadius(star);
@@ -362,7 +447,9 @@ class App extends React.Component {
         -maxHeight / 2 - star.particleRadius,
       ];
       let [rightEdge, bottomEdge] = [-leftEdge, -topEdge];
-      let gConstant = gravity * star.starMass**.4;
+      this.fields[index].colorFrame =
+        (this.fields[index].colorFrame + relDelta) % 10;
+      let gConstant = (gravity * Math.log(star.starMass)) / Math.log(20);
       let newMass = star.starMass;
       let newPhotons = star.photons;
       let vx = star.vx;
@@ -385,13 +472,15 @@ class App extends React.Component {
           vy += ((mouseAcceleration * this.mouseY) / dist / scale) * relDelta;
         }
       } else {
-          let vMag = (vx * vx + vy * vy) ** 0.5;
-        let xSign = vx < 0 ? 1 : -1;
-        let ySign = vy < 0 ? 1 : -1;
-          vx += xSign*((starDrag * vx *vx ) / vMag) * relDelta;
-          vy += ySign *((starDrag * vy*vy ) / vMag) * relDelta;
-  
-  
+        let vMag = (vx * vx + vy * vy) ** 0.5;
+        if (vMag < 0.005) {
+          vx = vy = 0;
+        } else {
+          let xSign = vx < 0 ? 1 : -1;
+          let ySign = vy < 0 ? 1 : -1;
+          vx += xSign * ((starDrag * vx * vx) / vMag) * relDelta;
+          vy += ySign * ((starDrag * vy * vy) / vMag) * relDelta;
+        }
       }
       if (debugFrame) {
         console.log("gConstant", gConstant);
@@ -451,8 +540,19 @@ class App extends React.Component {
             vy: (1200 * p.y) / dist,
           });
           this.genParticle(star, true, p);
+          if (!updates.featureTriggers.firstPhoton) {
+            updates.featureTriggers.firstPhoton = true;
+            updates.logText.unshift(
+              "Colliding with particles emits photons. Maybe with enough light...")
+          }
           newMass += star.particleMass;
           newPhotons += star.particlePhotons;
+          if(!updates.featureTriggers.tenthPhoton && newPhotons >= 10) {
+            updates.featureTriggers.tenthPhoton = true;
+            updates.logText.unshift(
+            "Yes, it looks like you can use the photons to increase the particle density.")
+          }
+
         }
       }
 
@@ -474,5 +574,31 @@ class App extends React.Component {
 function getRandomInt(max) {
   return Math.floor(Math.random() * Math.floor(max));
 }
+
+function itoa(num, noFrac) {
+  if (num > 1e15) {
+    let oom = Math.floor(Math.log(num) / Math.log(10));
+    return (num / 10 ** oom).toFixed(2) + "e" + oom;
+  }
+  let suffix = "";
+  let base = 1;
+  if (num > 1e12) {
+    suffix = "T";
+    base = 1e12;
+  } else if (num >= 1e9) {
+    suffix = "G";
+    base = 1e9;
+  } else if (num >= 1e6) {
+    suffix = "M";
+    base = 1e6;
+  } else if (num >= 1e3) {
+    suffix = "k";
+    base = 1e3;
+  } else if (noFrac) {
+    return num;
+  }
+  return (num / base).toFixed(3) + suffix;
+}
+window.itoa = itoa;
 
 export default App;

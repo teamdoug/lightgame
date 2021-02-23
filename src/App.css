@@ -36,6 +36,17 @@ body {
   padding: 5px;
   min-height: calc(100vh - 117px);
   max-height: calc(100vh - 117px);
+  position:relative;
+}
+
+#log {
+  position: absolute;
+  bottom: 0;
+  height: 150px;
+}
+
+#log p {
+  margin: 2px 0px;
 }
 
 #mainPanel {
@@ -55,17 +66,15 @@ body {
   position: relative;
 }
 
-.list {
-  border-collapse: collapse;
+.button {
+  border: 1px #ddd solid;
+  display: inline;
+  padding: 3px 5px;
+  background-color: #222;
+  cursor: pointer;
+  user-select: none; 
 }
-.list th,
-td {
-  padding: 3px 8px;
-}
-.list tr {
-  border-bottom: 1px solid #ddd;
-}
-.list .selected {
-  font-weight: bold;
-  color: #eee;
+
+.button:hover {
+  background-color: #888;
 }
