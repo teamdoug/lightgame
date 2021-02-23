@@ -4,8 +4,12 @@ import React from "react";
 const maxWidth = 3000;
 const maxHeight = 3000;
 const gridSpacing = 200;
-const velocityCap = 5200;
+const velocityCap = 400;
 const accelerationCap = 300;
+const gravity = .1;
+const mouseAcceleration = 300;
+const collapseMass = 1e20;
+const starDrag = 1;
 
 class App extends React.Component {
   constructor(props) {
@@ -45,15 +49,17 @@ class App extends React.Component {
       photons: 0,
       starMass: 10,
       starRadius: 20,
-      particleMass: 0.2,
-      particleRadius: 5,
-      particleCount: 1000,
+      particleMass: 0.1,
+      particleRadius: 3,
+      particleCount: 50,
       particlePhotons: 1,
       vx: 50,
       vy: 0,
       gridX: 0,
       gridY: 0,
       velocity: 50,
+      mouseGravity: 5000000,
+      mouseDrag: .1,
     };
     return star;
   };
@@ -75,6 +81,11 @@ class App extends React.Component {
     if (canvas !== null) {
       this.drawCanvas(canvas, star, field);
     }
+    let starProgress =
+      (100 * Math.log(star.starMass - 9)) / Math.log(collapseMass);
+    if (starProgress > 100) {
+      starProgress = 100;
+    }
 
     return (
       <div id="verticalFlex">
@@ -89,6 +100,16 @@ class App extends React.Component {
           <div className="panel" id="leftPanel">
             <p>Mass: {star.starMass.toFixed(2)}</p>
             <p>Velocity: {star.velocity.toFixed(2)}</p>
+            <p>
+              <button onClick={() => this.modifyStar(0, "starMass", 100)}>
+                Big Mass
+              </button>{" "}
+            </p>
+            <p>
+              <button onClick={() => this.modifyStar(0, "starRadius", 10)}>
+                Big Radius
+              </button>{" "}
+            </p>
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
             <canvas
@@ -100,10 +121,33 @@ class App extends React.Component {
             ></canvas>
           </div>
         </div>
-        <div className="progress">X</div>
+        <div className="progress">
+          <div
+            style={{
+              width: starProgress + "%",
+              postition: 'absolute',
+              top: 0,
+              left: 0,
+              height: "21px",
+              backgroundColor: "#151",
+            }}
+          ></div>
+          <div style={{ position: "absolute", top: 0, left:0 }}>
+            {starProgress.toFixed(2)}% to Stellar Mass (
+            {collapseMass.toExponential(2)})
+          </div>
+        </div>
       </div>
     );
   }
+
+  modifyStar = (index, prop, increase) => {
+    let star = this.state.stars[index];
+    star[prop] *= increase;
+    this.setState({
+      stars: this.state.stars.splice(index, 1, star),
+    });
+  };
 
   genParticle = (star, offScreen, existing) => {
     let pRad = star.particleRadius;
@@ -176,7 +220,7 @@ class App extends React.Component {
     ctx.fillStyle = "#575757";
     ctx.fillRect(0, 0, w, h);
     ctx.beginPath();
-    ctx.strokeStyle = "#222";
+    ctx.strokeStyle = "#333";
     let gridX = star.gridX;
     while (gridX < canvas.width) {
       if (gridX >= 0) {
@@ -198,11 +242,11 @@ class App extends React.Component {
       gridY += gridSpacing;
     }
 
-    ctx.strokeStyle = "#dd3";
+    ctx.fillStyle = "#100";
     ctx.beginPath();
     ctx.arc(cx, cy, star.starRadius, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.strokeStyle = "#bbb";
+    ctx.fill();
+    ctx.fillStyle = "#000";
     for (const particle of field.particles) {
       if (
         particle.x < -cx - pRad ||
@@ -214,7 +258,7 @@ class App extends React.Component {
       }
       ctx.beginPath();
       ctx.arc(particle.x + cx, particle.y + cy, pRad, 0, 2 * Math.PI);
-      ctx.stroke();
+      ctx.fill();
     }
     ctx.strokeStyle = "#ff4";
     for (const photon of field.photons) {
@@ -275,13 +319,24 @@ class App extends React.Component {
       console.log("delta too large: " + delta);
       delta = 1000;
     }
+
     let minDelta = 1000 / 60;
+    let debugFrame = false;
+    if (tFrame % 1000 < minDelta) {
+      debugFrame = true;
+    }
+    let loopCount = 0;
     while (delta > minDelta) {
       delta -= minDelta;
       if (this.state.paused) {
         continue;
       }
-      this.update(minDelta);
+      loopCount += 1;
+      this.update(minDelta, debugFrame);
+      debugFrame = false;
+    }
+    if (loopCount > 1) {
+      console.log("loops", loopCount);
     }
     this.lastFrame = tFrame - delta;
     this.renderID = window.requestAnimationFrame(this.gameLoop);
@@ -291,23 +346,24 @@ class App extends React.Component {
     this.setState({ paused: !this.state.paused });
   };
 
-  update = (delta) => {
+  update = (delta, debugFrame) => {
     let relDelta = delta / 1000;
     let updates = { stars: [] };
-    const drag = 0.0005;
+    const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
       let [leftEdge, topEdge] = [
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
       ];
       let [rightEdge, bottomEdge] = [-leftEdge, -topEdge];
-      let gConstant = 10000 * star.starMass;
+      let gConstant = gravity * star.starMass**.5;
       let newMass = star.starMass;
       let newRadius = star.starRadius;
       let newPhotons = star.photons;
       let vx = star.vx;
       let vy = star.vy;
       let velocity = star.velocity;
+      let drag = dragConstant;
       if (this.mouseClicked) {
         let distSq = this.mouseX * this.mouseX + this.mouseY * this.mouseY;
         let dist = distSq ** 0.5;
@@ -315,17 +371,49 @@ class App extends React.Component {
         if (dist > accelerationCap) {
           scale = dist / accelerationCap;
         }
-        if (dist > newRadius) {
-          vx += ((190 * this.mouseX) / dist / scale) * relDelta;
-          vy += ((190 * this.mouseY) / dist / scale) * relDelta;
-          velocity = (vx * vx + vy * vy) ** 0.5;
-          if (velocity > velocityCap) {
-            vx *= velocityCap / velocity;
-            vy *= velocityCap / velocity;
-            velocity = velocityCap;
-          }
+
+        if (dist <= newRadius) {
+          gConstant += star.mouseGravity;
+          drag *= star.mouseDrag;
+        } else {
+          vx += ((mouseAcceleration * this.mouseX) / dist / scale) * relDelta;
+          vy += ((mouseAcceleration * this.mouseY) / dist / scale) * relDelta;
         }
+      } else {
+          let vMag = (vx * vx + vy * vy) ** 0.5;
+        let xSign = vx < 0 ? 1 : -1;
+        let ySign = vy < 0 ? 1 : -1;
+          vx += xSign*((starDrag * vx *vx ) / vMag) * relDelta;
+          vy += ySign *((starDrag * vy*vy ) / vMag) * relDelta;
+  
+  
       }
+      if (debugFrame) {
+        console.log("gConstant", gConstant);
+      }
+      velocity = (vx * vx + vy * vy) ** 0.5;
+      if (velocity > velocityCap) {
+        vx *= velocityCap / velocity;
+        vy *= velocityCap / velocity;
+        velocity = velocityCap;
+      }
+
+      let newDrawPhotons = [];
+      for (let p of this.fields[index].photons) {
+        p.x += p.vx * relDelta;
+        p.y += p.vy * relDelta;
+        if (
+          p.x < leftEdge ||
+          p.x > rightEdge ||
+          p.y < topEdge ||
+          p.y > bottomEdge
+        ) {
+          continue;
+        }
+        newDrawPhotons.push(p);
+      }
+      this.fields[index].photons = newDrawPhotons;
+
       for (let p of this.fields[index].particles) {
         let distSq = p.x * p.x + p.y * p.y;
         let dist = distSq ** 0.5;
@@ -348,15 +436,14 @@ class App extends React.Component {
         ) {
           this.genParticle(star, true, p);
         }
-        if (
-          p.x * p.x + p.y * p.y <
-          (star.particleRadius + star.starRadius) ** 2
-        ) {
+        if (p.x * p.x + p.y * p.y < (star.particleRadius + newRadius) ** 2) {
+          distSq = p.x * p.x + p.y * p.y;
+          dist = distSq ** 0.5;
           this.fields[index].photons.push({
             x: (newRadius * p.x) / dist,
             y: (newRadius * p.y) / dist,
-            vx: (400 * p.x) / dist,
-            vy: (400 * p.y) / dist,
+            vx: (1200 * p.x) / dist,
+            vy: (1200 * p.y) / dist,
           });
           this.genParticle(star, true, p);
           newMass += star.particleMass;
@@ -364,21 +451,6 @@ class App extends React.Component {
           newPhotons += star.particlePhotons;
         }
       }
-      let newDrawPhotons = [];
-      for (let p of this.fields[index].photons) {
-        p.x += p.vx * relDelta;
-        p.y += p.vy * relDelta;
-        if (
-          p.x < leftEdge ||
-          p.x > rightEdge ||
-          p.y < topEdge ||
-          p.y > bottomEdge
-        ) {
-          continue;
-        }
-        newDrawPhotons.push(p);
-      }
-      this.fields[index].photons = newDrawPhotons;
 
       updates.stars.push({
         ...star,
