@@ -13,6 +13,16 @@ const yellowCollapseMass = 1e25;
 //const blueCollapseMass = 1e30;
 const starDrag = 1;
 
+// TODO: Add upgrades, starting with particleDensity + 50%
+// TODO: Reveal mass at 12 mass? Show progress bar? Maybe progress bar later... Or an interim progress bar?
+// TODO: mousegravity behind an upgrade. upgrade again for permanent. upgrades for power?
+// TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
+
+// Lower priority
+// TODO: Animate log/other things
+// TODO: Design next layer: star clusters/nebulas
+// TODO: Options to control star drag?
+
 class App extends React.Component {
   constructor(props) {
     super(props);
