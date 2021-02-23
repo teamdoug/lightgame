@@ -6,7 +6,7 @@ const maxHeight = 3000;
 const gridSpacing = 200;
 const velocityCap = 400;
 const accelerationCap = 300;
-const gravity = .1;
+const gravity = .2;
 const mouseAcceleration = 300;
 const collapseMass = 1e20;
 const starDrag = 1;
@@ -48,7 +48,7 @@ class App extends React.Component {
     let star = {
       photons: 0,
       starMass: 10,
-      starRadius: 20,
+      starRadiusFactor: 10,
       particleMass: 0.1,
       particleRadius: 3,
       particleCount: 50,
@@ -58,7 +58,7 @@ class App extends React.Component {
       gridX: 0,
       gridY: 0,
       velocity: 50,
-      mouseGravity: 5000000,
+      mouseGravity: 10000000,
       mouseDrag: .1,
     };
     return star;
@@ -72,6 +72,10 @@ class App extends React.Component {
       ),
     };
   };
+
+  getStarRadius = (star) => {
+    return star.starRadiusFactor * star.starMass ** (1/3)
+  }
 
   render() {
     let s = this.state;
@@ -106,7 +110,7 @@ class App extends React.Component {
               </button>{" "}
             </p>
             <p>
-              <button onClick={() => this.modifyStar(0, "starRadius", 10)}>
+              <button onClick={() => this.modifyStar(0, "starRadiusFactor", 10)}>
                 Big Radius
               </button>{" "}
             </p>
@@ -213,6 +217,7 @@ class App extends React.Component {
 
   drawCanvas = (canvas, star, field) => {
     let pRad = star.particleRadius;
+    let starRadius = this.getStarRadius(star);
 
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
@@ -244,7 +249,7 @@ class App extends React.Component {
 
     ctx.fillStyle = "#100";
     ctx.beginPath();
-    ctx.arc(cx, cy, star.starRadius, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, starRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.fillStyle = "#000";
     for (const particle of field.particles) {
@@ -351,14 +356,14 @@ class App extends React.Component {
     let updates = { stars: [] };
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
+      let starRadius = this.getStarRadius(star);
       let [leftEdge, topEdge] = [
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
       ];
       let [rightEdge, bottomEdge] = [-leftEdge, -topEdge];
-      let gConstant = gravity * star.starMass**.5;
+      let gConstant = gravity * star.starMass**.4;
       let newMass = star.starMass;
-      let newRadius = star.starRadius;
       let newPhotons = star.photons;
       let vx = star.vx;
       let vy = star.vy;
@@ -372,7 +377,7 @@ class App extends React.Component {
           scale = dist / accelerationCap;
         }
 
-        if (dist <= newRadius) {
+        if (dist <= starRadius) {
           gConstant += star.mouseGravity;
           drag *= star.mouseDrag;
         } else {
@@ -436,18 +441,17 @@ class App extends React.Component {
         ) {
           this.genParticle(star, true, p);
         }
-        if (p.x * p.x + p.y * p.y < (star.particleRadius + newRadius) ** 2) {
+        if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
           dist = distSq ** 0.5;
           this.fields[index].photons.push({
-            x: (newRadius * p.x) / dist,
-            y: (newRadius * p.y) / dist,
+            x: (starRadius * p.x) / dist,
+            y: (starRadius * p.y) / dist,
             vx: (1200 * p.x) / dist,
             vy: (1200 * p.y) / dist,
           });
           this.genParticle(star, true, p);
           newMass += star.particleMass;
-          newRadius = (newRadius ** 3 + star.particleRadius ** 3) ** (1 / 3);
           newPhotons += star.particlePhotons;
         }
       }
@@ -455,7 +459,6 @@ class App extends React.Component {
       updates.stars.push({
         ...star,
         starMass: newMass,
-        starRadius: newRadius,
         photons: newPhotons,
         gridX: (star.gridX - vx * relDelta) % gridSpacing,
         gridY: (star.gridY - vy * relDelta) % gridSpacing,
