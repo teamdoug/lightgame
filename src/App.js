@@ -12,16 +12,48 @@ const collapseMass = 1e20;
 const yellowCollapseMass = 1e25;
 //const blueCollapseMass = 1e30;
 const starDrag = 1;
+const photonUpgradeDef = {
+  particleCount: {
+    initialCost: 20,
+    costMultiplier: 50,
+    effect: 1.5,
+  },
+  particlePhotons: {
+    initialCost: 30,
+    costMultiplier: 2.1,
+    effect: 2,
+  },
+  particleMass: {
+    initialCost: 40,
+    costMultiplier: 3,
+    effect: 10,
+  },
+};
 
-// TODO: Add upgrades, starting with particleDensity + 50%
+// TODO: Add upgrades, starting with particleCount + 50%
 // TODO: Reveal mass at 12 mass? Show progress bar? Maybe progress bar later... Or an interim progress bar?
 // TODO: mousegravity behind an upgrade. upgrade again for permanent. upgrades for power?
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
+// TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
+// Mouse gravity partially multiplicative (as an upgrade?)
+// only setState once pper gameLoop
+// animate sun emitting photons
 
 // Lower priority
 // TODO: Animate log/other things
 // TODO: Design next layer: star clusters/nebulas
 // TODO: Options to control star drag?
+
+const logTexts = {
+  opening: "The universe is dark.",
+  firstPhoton:
+    "Colliding with that particle emitted a photon. You're pretty sure that's not how physics works.",
+  unlockUpgrades: "Looks like photons might be useful.",
+  unlockMass:
+    "More particles means faster growth. Your size isn't increasing much, but you're absorbing some mass with each collision.",
+    unlockProgress:
+    "If you got big enough, you could collapse into a star. Stars generate a lot of photons.",
+};
 
 class App extends React.Component {
   constructor(props) {
@@ -31,7 +63,7 @@ class App extends React.Component {
     this.mainPanel = React.createRef();
     this.canvas = React.createRef();
     const storedState = localStorage.getItem("save");
-    if (false && storedState) {
+    if (storedState) {
       this.state = JSON.parse(storedState);
     } else {
       this.state = this.getInitState();
@@ -40,22 +72,37 @@ class App extends React.Component {
     for (let star of this.state.stars) {
       this.fields.push(this.getInitField(star));
     }
-    this.mouseX = 0;
-    this.mouseY = 0;
-    this.mouseClicked = false;
+    this.resetLocalVars();
     window.addEventListener("beforeunload", this.save);
     window.addEventListener("resize", this.resizeCanvas);
     window.app = this;
   }
 
+  reset = () => {
+    let state = this.getInitState();
+    this.setState(state);
+    this.fields = [];
+    for (let star of state.stars) {
+      this.fields.push(this.getInitField(star));
+    }
+  };
+
+  resetLocalVars = () => {
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.mouseClicked = false;
+  };
+
   getInitState = () => {
     let state = {
       paused: false,
       stars: [this.getInitStar()],
-      logText: ["The universe is dark."],
+      logText: [logTexts.opening],
+      tab: "upgrades",
       featureTriggers: {
         firstPhoton: false,
-        tenthPhoton: false,
+        unlockUpgrades: false,
+        unlockMass: false,
       },
       upgrades: {
         startingGravity: 0,
@@ -67,7 +114,7 @@ class App extends React.Component {
         startingRadiusFactor: 0,
         startingParticleRadius: 0,
         startingParticleMass: 0,
-        startingPhotonCount: 0,
+        startingParticlePhotons: 0,
       },
     };
     return state;
@@ -78,7 +125,7 @@ class App extends React.Component {
       photons: 0,
       starMass: 10,
       starRadiusFactor: 20,
-      particleMass: 0.1,
+      particleMass: 1,
       particleRadius: 3,
       particleCount: 50,
       particlePhotons: 1,
@@ -90,7 +137,7 @@ class App extends React.Component {
       mouseGravity: 1000000,
       mouseDrag: 0.1,
       upgrades: {
-        photonCount: 0,
+        particlePhotons: 0,
         particleCount: 0,
         particleMass: 0,
         particleRadius: 0,
@@ -119,10 +166,22 @@ class App extends React.Component {
     );
   };
 
+  calcUpgradeCosts = (star) => {
+    // TODO harsher scaling past 1e10 or something
+    let costs = {};
+    for (const [upgrade, props] of Object.entries(photonUpgradeDef)) {
+      costs[upgrade] =
+        props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
+    }
+    return costs;
+  };
+
   render() {
     let s = this.state;
-    let star = s.stars[0];
-    let field = this.fields[0];
+    let starIndex = 0;
+    let star = s.stars[starIndex];
+    let field = this.fields[starIndex];
+    let ft = s.featureTriggers;
     const canvas = this.canvas.current;
     if (canvas !== null) {
       this.drawCanvas(canvas, star, field);
@@ -132,52 +191,139 @@ class App extends React.Component {
     if (starProgress > 100) {
       starProgress = 100;
     }
+    let upgradeCosts = this.calcUpgradeCosts(star);
 
     return (
       <div id="verticalFlex">
-        <h2 className="header">
-          {s.featureTriggers.firstPhoton && (
-            <>{itoa(star.photons, true)} photons</>
-          )}
+        <div className="header">
+          {ft.firstPhoton && <span className="headerElement"><span className="headerValue">{itoa(star.photons, true)}</span> photons</span>}
+          {ft.unlockMass && <span className="headerElement headerValue">{itoa(star.starMass, true, 1, 'g')}</span>}
           <div className="button" onClick={this.togglePause}>
             {s.paused ? "Resume" : "Pause"}
           </div>
+
           <div
             className="button"
-            onClick={() => this.modifyStar(0, "photons", 100)}
+            onClick={() => this.modifyStar(starIndex, "photons", 100)}
           >
             Photons
           </div>
-        </h2>
+          <div
+            className="button"
+            onClick={() => this.modifyStar(starIndex, "starMass", 100)}
+          >
+            Mass
+          </div>
+          <div
+            className="button"
+            onClick={() => this.modifyStar(starIndex, "starRadiusFactor", 1.1)}
+          >
+            Radius
+          </div>
+          <div className="button" onClick={this.reset}>
+            Reset
+          </div>
+        </div>
 
         <div id="flex">
           <div className="panel" id="leftPanel">
-            <p>Mass: {itoa(star.starMass)}</p>
-            <p>Velocity: {star.velocity.toFixed(2)}</p>
-            <p>
-              <div
-                className="button"
-                onClick={() => this.modifyStar(0, "starMass", 100)}
-              >
-                Big Mass
-              </div>{" "}
-            </p>
-            <p>
-              <div
-                className="button"
-                onClick={() => this.modifyStar(0, "starRadiusFactor", 1.1)}
-              >
-                Big Radius
-              </div>{" "}
-            </p>
+            {/*<p>Velocity: {star.velocity.toFixed(2)}</p>*/}
+            {ft.unlockUpgrades && (
+              <div>
+                <div className="tabs">
+                  <div
+                    className="tab"
+                    onClick={() => this.setState({ tab: "upgrades" })}
+                  >
+                    Upgrades
+                  </div>
+                </div>
+                <div className="tabPane">
+                  {s.tab === "upgrades" && (
+                    <div id="upgrades">
+                      <div
+                        className="upgrade button"
+                        onClick={() =>
+                          this.buyUpgrade(
+                            starIndex,
+                            "particleCount",
+                            upgradeCosts.particleCount
+                          )
+                        }
+                      >
+                        <p>
+                          <span className="upgradeName">Particle Count</span>
+                          {" " + itoa(upgradeCosts.particleCount, true)} photons
+                        </p>
+                        <p className="upgradeDesc">
+                          Increase the number of particles in the field by{" "}
+                          {Math.round(
+                            (photonUpgradeDef.particleCount.effect - 1) * 100
+                          )}
+                          %
+                        </p>
+                      </div>
+                      {ft.unlockMass &&<>
+                      <div
+                        className="upgrade button"
+                        onClick={() =>
+                          this.buyUpgrade(
+                            starIndex,
+                            "particlePhotons",
+                            upgradeCosts.particlePhotons
+                          )
+                        }
+                      >
+                        <p>
+                          <span className="upgradeName">Particle Photons</span>
+                          {" " + itoa(upgradeCosts.particlePhotons, true)} photons
+                        </p>
+                        <p className="upgradeDesc">
+                          Increase the number of photons generated by particle collisions by{" "}
+                          {Math.round(
+                            (photonUpgradeDef.particlePhotons.effect - 1) * 100
+                          )}
+                          %
+                        </p>
+                      </div>
+
+                      <div
+                        className="upgrade button"
+                        onClick={() =>
+                          this.buyUpgrade(
+                            starIndex,
+                            "particleMass",
+                            upgradeCosts.particleMass
+                          )
+                        }
+                      >
+                        <p>
+                          <span className="upgradeName">Particle Count</span>
+                          {" " + itoa(upgradeCosts.particleMass, true)} photons
+                        </p>
+                        <p className="upgradeDesc">
+                          Increase the mass of particles in the field by{" "}
+                          {Math.round(
+                            (photonUpgradeDef.particleMass.effect - 1) * 100
+                          )}
+                          %
+                        </p>
+                      </div>
+                      </>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div id="log">
               {s.logText.map((value, index) => (
-                <p key={s.logText.length-index}>{value}</p>
+                <p key={s.logText.length - index}>{value}</p>
               ))}
             </div>
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
             <canvas
+              className="starfield"
               ref={this.canvas}
               onMouseMove={this.mouseMove}
               onMouseDown={this.mouseMove}
@@ -186,7 +332,7 @@ class App extends React.Component {
             ></canvas>
           </div>
         </div>
-        <div className="progress">
+        {ft.unlockMass && <div className="progress">
           <div
             style={{
               width: starProgress + "%",
@@ -198,18 +344,44 @@ class App extends React.Component {
             }}
           ></div>
           <div style={{ position: "absolute", top: 0, left: 0 }}>
-            {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)})
+            {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)}g)
           </div>
-        </div>
+        </div>}
       </div>
     );
   }
 
-  modifyStar = (index, prop, increase) => {
-    let star = this.state.stars[index];
+  buyUpgrade = (starIndex, name, cost) => {
+    this.setState((state) => {
+      let stars = [...state.stars];
+      let star = { ...state.stars[starIndex] };
+      star.upgrades = { ...star.upgrades };
+      if (cost > star.photons) {
+        console.log("not buying");
+        return {};
+      }
+      star.photons -= cost;
+      star.upgrades[name] += 1;
+      star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
+      stars[starIndex] = star;
+      let updates = { stars: stars };
+      if (!state.featureTriggers.unlockMass) {
+        updates.featureTriggers = { ...state.featureTriggers };
+        updates.featureTriggers.unlockMass = true;
+        updates.logText = [...state.logText ]
+        updates.logText.unshift(logTexts.unlockMass);
+      }
+      return updates;
+    });
+  };
+
+  modifyStar = (starIndex, prop, increase) => {
+    let stars = [...this.state.stars];
+    let star = { ...stars[starIndex] };
     star[prop] = star[prop] * increase + 1;
+    stars[starIndex] = star;
     this.setState({
-      stars: this.state.stars.splice(index, 1, star),
+      stars: stars,
     });
   };
 
@@ -451,14 +623,14 @@ class App extends React.Component {
     };
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
+      let field = this.fields[index];
       let starRadius = this.getStarRadius(star);
       let [leftEdge, topEdge] = [
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
       ];
       let [rightEdge, bottomEdge] = [-leftEdge, -topEdge];
-      this.fields[index].colorFrame =
-        (this.fields[index].colorFrame + relDelta) % 10;
+      field.colorFrame = (field.colorFrame + relDelta) % 10;
       let gConstant = (gravity * Math.log(star.starMass)) / Math.log(20);
       let newMass = star.starMass;
       let newPhotons = star.photons;
@@ -503,7 +675,7 @@ class App extends React.Component {
       }
 
       let newDrawPhotons = [];
-      for (let p of this.fields[index].photons) {
+      for (let p of field.photons) {
         p.x += p.vx * relDelta;
         p.y += p.vy * relDelta;
         if (
@@ -516,9 +688,9 @@ class App extends React.Component {
         }
         newDrawPhotons.push(p);
       }
-      this.fields[index].photons = newDrawPhotons;
+      field.photons = newDrawPhotons;
 
-      for (let p of this.fields[index].particles) {
+      for (let p of field.particles) {
         let distSq = p.x * p.x + p.y * p.y;
         let dist = distSq ** 0.5;
         let vMag = (p.vx * p.vx + p.vy * p.vy) ** 0.5;
@@ -543,7 +715,7 @@ class App extends React.Component {
         if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
           dist = distSq ** 0.5;
-          this.fields[index].photons.push({
+          field.photons.push({
             x: (starRadius * p.x) / dist,
             y: (starRadius * p.y) / dist,
             vx: (1200 * p.x) / dist,
@@ -552,18 +724,18 @@ class App extends React.Component {
           this.genParticle(star, true, p);
           if (!updates.featureTriggers.firstPhoton) {
             updates.featureTriggers.firstPhoton = true;
-            updates.logText.unshift(
-              "Colliding with particles emits photons. Maybe with enough light...")
+            updates.logText.unshift(logTexts.firstPhoton);
           }
           newMass += star.particleMass;
           newPhotons += star.particlePhotons;
-          if(!updates.featureTriggers.tenthPhoton && newPhotons >= 10) {
-            updates.featureTriggers.tenthPhoton = true;
-            updates.logText.unshift(
-            "Yes, it looks like you can use the photons to increase the particle density.")
+          if (!updates.featureTriggers.unlockUpgrades && newPhotons >= 10) {
+            updates.featureTriggers.unlockUpgrades = true;
+            updates.logText.unshift(logTexts.unlockUpgrades);
           }
-
         }
+      }
+      for (let i = field.particles.length; i < star.particleCount; i++) {
+        field.particles.push(this.genParticle(star, false));
       }
 
       updates.stars.push({
@@ -585,10 +757,10 @@ function getRandomInt(max) {
   return Math.floor(Math.random() * Math.floor(max));
 }
 
-function itoa(num, noFrac) {
+function itoa(num, noFrac, noFracFixed, unitSuffix='') {
   if (num > 1e15) {
     let oom = Math.floor(Math.log(num) / Math.log(10));
-    return (num / 10 ** oom).toFixed(2) + "e" + oom;
+    return (num / 10 ** oom).toFixed(2) + "e" + oom + unitSuffix;
   }
   let suffix = "";
   let base = 1;
@@ -605,9 +777,12 @@ function itoa(num, noFrac) {
     suffix = "k";
     base = 1e3;
   } else if (noFrac) {
-    return num;
+    if (noFracFixed) {
+      return num.toFixed(noFracFixed)+ unitSuffix;
+    }
+    return num.toFixed(0)+ unitSuffix;
   }
-  return (num / base).toFixed(3) + suffix;
+  return (num / base).toFixed(3) + suffix+ unitSuffix;
 }
 window.itoa = itoa;
 

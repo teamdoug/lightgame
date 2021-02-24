@@ -16,7 +16,18 @@ body {
 .header {
   height: 25px;
   margin: 20px 0px;
+  font-size: larger;
 }
+
+.headerValue {
+  font-size: x-large;
+  font-weight: bold
+}
+
+.headerElement {
+  margin-right: 15px;
+}
+
 #flex {
   display: flex;
   flex-direction: row;
@@ -31,30 +42,36 @@ body {
 }
 
 #leftPanel {
-  flex-basis: 20%;
+  flex-basis: 40%;
   margin-right: 10px;
   padding: 5px;
   min-height: calc(100vh - 117px);
   max-height: calc(100vh - 117px);
   position:relative;
+  overflow: hidden;
 }
 
 #log {
   position: absolute;
   bottom: 0;
   height: 150px;
+  margin-right: 5px;
 }
 
 #log p {
-  margin: 2px 0px;
+  margin: 3px 0px;
 }
 
 #mainPanel {
   flex-grow: 5;
-  flex-basis: 80%;
+  flex-basis: 60%;
   padding: 0px;
   min-height: calc(100vh - 107px);
   max-height: calc(100vh - 107px);
+}
+
+.starfield {
+  cursor: crosshair;
 }
 
 .progress {
@@ -68,13 +85,49 @@ body {
 
 .button {
   border: 1px #ddd solid;
-  display: inline;
+  display: inline-block;
   padding: 3px 5px;
   background-color: #222;
   cursor: pointer;
   user-select: none; 
 }
 
+.button p {
+  margin: 0px;
+}
+
 .button:hover {
   background-color: #888;
+}
+
+.upgrade {
+  margin-bottom: 5px;
+}
+
+.upgradeName {
+  font-weight: bold;
+}
+.upgradeDesc {
+  font-size: small;
+}
+
+.tabs {
+  margin-bottom: 0px;
+  padding-bottom: 0px;
+  box-sizing: border-box;
+}
+.tabPane {
+  border-top: 1px #ddd solid;
+  padding-top: 6px;
+  box-sizing: border-box;
+
+}
+
+.tab {
+  padding: 0px 2px 3px 2px;
+  border: 1px #ddd solid;
+  display: inline-block;
+  border-bottom: none;
+  cursor: pointer;
+  user-select: none;
 }
