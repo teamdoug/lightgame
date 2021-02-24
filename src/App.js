@@ -20,13 +20,13 @@ const photonUpgradeDef = {
   },
   particlePhotons: {
     initialCost: 20,
-    costMultiplier: 2.3,
+    costMultiplier: 2.35,
     effect: 2,
   },
   particleMass: {
     initialCost: 40,
     costMultiplier: 2,
-    effect: 7,
+    effect: 6,
   },
 };
 const massMilestones = [
@@ -37,16 +37,23 @@ const massMilestones = [
       "When the mouse is inside you or you aren't moving, you attract particles more strongly",
     description:
       "When the mouse is inside the protostar or it isn't moving, it attracts particles more strongly",
+    unlockText:
+      "With a little stability, you'll have a stronger gravitational attraction.",
   },
   {
     value: 1e10,
     name: "Tuned Gravity Field",
-    description: "Particles are more strongly attracted",
+    description: "Increase the power the of gravity field by 50%",
   },
   {
     value: 1e15,
     name: "Permanent Gravity Field",
-    description: "The temporary gravity field now always applies",
+    description: "The temporary gravity field always applies",
+  },
+  {
+    value: 1e20,
+    name: "Ultra Gravity Field",
+    description: "Increase the power the of gravity field by another 50%",
   },
   {
     value: 1e25,
@@ -132,6 +139,7 @@ class App extends React.Component {
         unlockUpgrades: false,
         firstUpgrade: false,
         unlockMass: false,
+        unlockCollapse: false,
       },
       upgrades: {
         startingGravity: 0,
@@ -393,6 +401,48 @@ class App extends React.Component {
                       )}
                     </div>
                   )}
+                  {s.tab === "milestones" && (
+                    <div id="milestones">
+                      {[
+                        ...Array(
+                          Math.min(
+                            star.milestonesUnlocked + 1,
+                            massMilestones.length
+                          )
+                        ).keys(),
+                      ].map((_, msIndex) => {
+                        return (
+                          <div
+                            className={
+                              "milestone" +
+                              (msIndex >= star.milestonesUnlocked
+                                ? " disabled"
+                                : "")
+                            }
+                          >
+                            <p>
+                              <span className="upgradeName">
+                                {massMilestones[msIndex].name}
+                              </span>
+                              {" " +
+                                itoa(
+                                  massMilestones[msIndex].value,
+                                  true,
+                                  1,
+                                  "g"
+                                )}
+                            </p>
+                            <p className="upgradeDesc">
+                              {massMilestones[msIndex].firstDescription &&
+                              !s.collapseCount
+                                ? massMilestones[msIndex].firstDescription
+                                : massMilestones[msIndex].description}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -461,6 +511,9 @@ class App extends React.Component {
         updates.featureTriggers.unlockMass = true;
         updates.logText = [...state.logText];
         updates.logText.unshift(logTexts.unlockMass);
+      }
+      if (name === "particleMass") {
+        star.particleRadius = (5 * star.particleMass) ** 0.3;
       }
       return updates;
     });
@@ -720,6 +773,8 @@ class App extends React.Component {
     };
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
+      star.particleRadius =
+        (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
       let field = this.fields[index];
       let starRadius = this.getStarRadius(star);
       let [leftEdge, topEdge] = [
@@ -736,6 +791,7 @@ class App extends React.Component {
       let velocity = star.velocity;
       let drag = dragConstant;
       let starDrag = starDragConstant;
+      let milestonesUnlocked = star.milestonesUnlocked;
       if (this.mouseClicked) {
         let distSq = this.mouseX * this.mouseX + this.mouseY * this.mouseY;
         let dist = distSq ** 0.5;
@@ -744,10 +800,21 @@ class App extends React.Component {
           scale = dist / accelerationCap;
         }
 
-        if (dist <= starRadius) {
+        if (
+          (star.milestonesUnlocked > 0 && dist <= starRadius) ||
+          star.milestonesUnlocked > 2
+        ) {
           gConstant += star.mouseGravity;
+          if (star.milestonesUnlocked > 1) {
+            gConstant *= 1.5;
+          }
+          if (star.milestonesUnlocked > 3) {
+            gConstant *= 1.5;
+            drag *= 1.2;
+          }
           drag *= star.mouseDrag;
-        } else {
+        }
+        if (dist > starRadius) {
           vx += ((mouseAcceleration * this.mouseX) / dist / scale) * relDelta;
           vy += ((mouseAcceleration * this.mouseY) / dist / scale) * relDelta;
         }
@@ -759,10 +826,20 @@ class App extends React.Component {
         if (vMag < 5) {
           starDrag *= 10;
         }
+
+        if (vMag < 3 || star.milestonesUnlocked > 2) {
+          gConstant += star.mouseGravity;
+          if (star.milestonesUnlocked > 1) {
+            gConstant *= 1.5;
+          }
+          if (star.milestonesUnlocked > 3) {
+            gConstant *= 1.5;
+            drag *= 1.2;
+          }
+          drag *= star.mouseDrag;
+        }
         if (vMag < 1) {
           vx = vy = 0;
-          gConstant += star.mouseGravity;
-          drag *= star.mouseDrag;
         } else {
           let xSign = vx < 0 ? 1 : -1;
           let ySign = vy < 0 ? 1 : -1;
@@ -841,6 +918,24 @@ class App extends React.Component {
             updates.logText.unshift(logTexts.unlockUpgrades);
           }
         }
+        while (
+          s.featureTriggers.unlockMass &&
+          milestonesUnlocked < massMilestones.length &&
+          newMass >= massMilestones[milestonesUnlocked].value
+        ) {
+          if (
+            !s.collapseCount &&
+            massMilestones[milestonesUnlocked].unlockText
+          ) {
+            updates.logText.unshift(
+              massMilestones[milestonesUnlocked].unlockText
+            );
+          }
+          milestonesUnlocked++;
+          if (milestonesUnlocked >= 5 && !updates.featureTriggers.unlockCollapse) {
+            updates.featureTriggers.unlockCollapse = true;
+          }
+        }
       }
       for (let i = field.particles.length; i < star.particleCount; i++) {
         field.particles.push(this.genParticle(star, false));
@@ -855,6 +950,7 @@ class App extends React.Component {
         vx: vx,
         vy: vy,
         velocity: velocity,
+        milestonesUnlocked: milestonesUnlocked,
       });
     }
     this.setState(updates);

@@ -92,15 +92,15 @@ body {
   user-select: none; 
 }
 
-.button p {
+.button p, .milestone p {
   margin: 0px;
 }
 
-.button:hover {
+.button:hover:not(.disabled) {
   background-color: #888;
 }
 
-.button.disabled, .button.disabled:hover {
+.button.disabled {
   background-color: #666
 }
 
@@ -116,6 +116,16 @@ body {
   font-size: small;
 }
 
+.milestone {
+  border: 1px #ddd solid;
+  padding: 3px 5px;
+  background-color: #222;
+  user-select: none; }
+
+.milestone.disabled {
+  background-color: #666
+}
+
 .tabs {
   margin-bottom: 0px;
   padding-bottom: 0px;
@@ -125,7 +135,6 @@ body {
   border-top: 1px #ddd solid;
   padding-top: 6px;
   box-sizing: border-box;
-
 }
 
 .tab {
