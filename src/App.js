@@ -8,27 +8,52 @@ const velocityCap = 400;
 const accelerationCap = 300;
 const gravity = 200000;
 const mouseAcceleration = 300;
-const collapseMass = 1e20;
-const yellowCollapseMass = 1e25;
+const collapseMass = 1e25;
+const yellowCollapseMass = 1e33;
 //const blueCollapseMass = 1e30;
-const starDrag = 1;
+const starDragConstant = 1;
 const photonUpgradeDef = {
   particleCount: {
-    initialCost: 20,
+    initialCost: 30,
     costMultiplier: 50,
     effect: 1.5,
   },
   particlePhotons: {
-    initialCost: 30,
-    costMultiplier: 2.1,
+    initialCost: 20,
+    costMultiplier: 2.3,
     effect: 2,
   },
   particleMass: {
     initialCost: 40,
-    costMultiplier: 3,
-    effect: 10,
+    costMultiplier: 2,
+    effect: 7,
   },
 };
+const massMilestones = [
+  {
+    value: 10000,
+    name: "Temporary Gravity Field",
+    firstDescription:
+      "When the mouse is inside you or you aren't moving, you attract particles more strongly",
+    description:
+      "When the mouse is inside the protostar or it isn't moving, it attracts particles more strongly",
+  },
+  {
+    value: 1e10,
+    name: "Tuned Gravity Field",
+    description: "Particles are more strongly attracted",
+  },
+  {
+    value: 1e15,
+    name: "Permanent Gravity Field",
+    description: "The temporary gravity field now always applies",
+  },
+  {
+    value: 1e25,
+    name: "Stellar Collapse",
+    description: "Unlock the ability to collapse into a star",
+  },
+];
 
 // TODO: Add upgrades, starting with particleCount + 50%
 // TODO: Reveal mass at 12 mass? Show progress bar? Maybe progress bar later... Or an interim progress bar?
@@ -38,6 +63,7 @@ const photonUpgradeDef = {
 // Mouse gravity partially multiplicative (as an upgrade?)
 // only setState once pper gameLoop
 // animate sun emitting photons
+// setting to limit rendered particles
 
 // Lower priority
 // TODO: Animate log/other things
@@ -49,9 +75,10 @@ const logTexts = {
   firstPhoton:
     "Colliding with that particle emitted a photon. You're pretty sure that's not how physics works.",
   unlockUpgrades: "Looks like photons might be useful.",
+  firstUpgrade: "More photons for more upgrades.",
   unlockMass:
     "More particles means faster growth. Your size isn't increasing much, but you're absorbing some mass with each collision.",
-    unlockProgress:
+  unlockProgress:
     "If you got big enough, you could collapse into a star. Stars generate a lot of photons.",
 };
 
@@ -99,9 +126,11 @@ class App extends React.Component {
       stars: [this.getInitStar()],
       logText: [logTexts.opening],
       tab: "upgrades",
+      particleLimit: 1000,
       featureTriggers: {
         firstPhoton: false,
         unlockUpgrades: false,
+        firstUpgrade: false,
         unlockMass: false,
       },
       upgrades: {
@@ -145,6 +174,7 @@ class App extends React.Component {
         permanentMouseGravity: 0,
         gravity: 0,
       },
+      milestonesUnlocked: 0,
     };
     return star;
   };
@@ -196,8 +226,17 @@ class App extends React.Component {
     return (
       <div id="verticalFlex">
         <div className="header">
-          {ft.firstPhoton && <span className="headerElement"><span className="headerValue">{itoa(star.photons, true)}</span> photons</span>}
-          {ft.unlockMass && <span className="headerElement headerValue">{itoa(star.starMass, true, 1, 'g')}</span>}
+          {ft.firstPhoton && (
+            <span className="headerElement">
+              <span className="headerValue">{itoa(star.photons, true)}</span>{" "}
+              photons
+            </span>
+          )}
+          {ft.unlockMass && (
+            <span className="headerElement headerValue">
+              {itoa(star.starMass, true, 1, "g")}
+            </span>
+          )}
           <div className="button" onClick={this.togglePause}>
             {s.paused ? "Resume" : "Pause"}
           </div>
@@ -232,40 +271,44 @@ class App extends React.Component {
               <div>
                 <div className="tabs">
                   <div
-                    className="tab"
+                    className={
+                      "tab " + (s.tab === "upgrades" ? "selected" : "")
+                    }
                     onClick={() => this.setState({ tab: "upgrades" })}
                   >
                     Upgrades
                   </div>
+                  {ft.unlockMass && (
+                    <div
+                      className={
+                        "tab " + (s.tab === "milestones" ? "selected" : "")
+                      }
+                      onClick={() => this.setState({ tab: "milestones" })}
+                    >
+                      Mass Milestones
+                    </div>
+                  )}
+                  {ft.unlockCollapse && (
+                    <div
+                      className={
+                        "tab " + (s.tab === "collapse" ? "selected" : "")
+                      }
+                      onClick={() => this.setState({ tab: "collapse" })}
+                    >
+                      Collapse
+                    </div>
+                  )}
                 </div>
                 <div className="tabPane">
                   {s.tab === "upgrades" && (
                     <div id="upgrades">
                       <div
-                        className="upgrade button"
-                        onClick={() =>
-                          this.buyUpgrade(
-                            starIndex,
-                            "particleCount",
-                            upgradeCosts.particleCount
-                          )
+                        className={
+                          "upgrade button" +
+                          (star.photons < upgradeCosts.particlePhotons
+                            ? " disabled"
+                            : "")
                         }
-                      >
-                        <p>
-                          <span className="upgradeName">Particle Count</span>
-                          {" " + itoa(upgradeCosts.particleCount, true)} photons
-                        </p>
-                        <p className="upgradeDesc">
-                          Increase the number of particles in the field by{" "}
-                          {Math.round(
-                            (photonUpgradeDef.particleCount.effect - 1) * 100
-                          )}
-                          %
-                        </p>
-                      </div>
-                      {ft.unlockMass &&<>
-                      <div
-                        className="upgrade button"
                         onClick={() =>
                           this.buyUpgrade(
                             starIndex,
@@ -276,40 +319,78 @@ class App extends React.Component {
                       >
                         <p>
                           <span className="upgradeName">Particle Photons</span>
-                          {" " + itoa(upgradeCosts.particlePhotons, true)} photons
+                          {" " + itoa(upgradeCosts.particlePhotons, true)}{" "}
+                          photons
                         </p>
                         <p className="upgradeDesc">
-                          Increase the number of photons generated by particle collisions by{" "}
+                          Increase the number of photons generated by particle
+                          collisions by{" "}
                           {Math.round(
                             (photonUpgradeDef.particlePhotons.effect - 1) * 100
                           )}
                           %
                         </p>
                       </div>
-
-                      <div
-                        className="upgrade button"
-                        onClick={() =>
-                          this.buyUpgrade(
-                            starIndex,
-                            "particleMass",
-                            upgradeCosts.particleMass
-                          )
-                        }
-                      >
-                        <p>
-                          <span className="upgradeName">Particle Count</span>
-                          {" " + itoa(upgradeCosts.particleMass, true)} photons
-                        </p>
-                        <p className="upgradeDesc">
-                          Increase the mass of particles in the field by{" "}
-                          {Math.round(
-                            (photonUpgradeDef.particleMass.effect - 1) * 100
-                          )}
-                          %
-                        </p>
-                      </div>
-                      </>}
+                      {ft.firstUpgrade && (
+                        <div
+                          className={
+                            "upgrade button" +
+                            (star.photons < upgradeCosts.particleCount
+                              ? " disabled"
+                              : "")
+                          }
+                          onClick={() =>
+                            this.buyUpgrade(
+                              starIndex,
+                              "particleCount",
+                              upgradeCosts.particleCount
+                            )
+                          }
+                        >
+                          <p>
+                            <span className="upgradeName">Particle Count</span>
+                            {" " + itoa(upgradeCosts.particleCount, true)}{" "}
+                            photons
+                          </p>
+                          <p className="upgradeDesc">
+                            Increase the number of particles in the field by{" "}
+                            {Math.round(
+                              (photonUpgradeDef.particleCount.effect - 1) * 100
+                            )}
+                            %
+                          </p>
+                        </div>
+                      )}
+                      {ft.unlockMass && (
+                        <div
+                          className={
+                            "upgrade button" +
+                            (star.photons < upgradeCosts.particleMass
+                              ? " disabled"
+                              : "")
+                          }
+                          onClick={() =>
+                            this.buyUpgrade(
+                              starIndex,
+                              "particleMass",
+                              upgradeCosts.particleMass
+                            )
+                          }
+                        >
+                          <p>
+                            <span className="upgradeName">Particle Mass</span>
+                            {" " + itoa(upgradeCosts.particleMass, true)}{" "}
+                            photons
+                          </p>
+                          <p className="upgradeDesc">
+                            Increase the mass of particles in the field by{" "}
+                            {Math.round(
+                              (photonUpgradeDef.particleMass.effect - 1) * 100
+                            )}
+                            %
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -332,21 +413,23 @@ class App extends React.Component {
             ></canvas>
           </div>
         </div>
-        {ft.unlockMass && <div className="progress">
-          <div
-            style={{
-              width: starProgress + "%",
-              postition: "absolute",
-              top: 0,
-              left: 0,
-              height: "21px",
-              backgroundColor: "#151",
-            }}
-          ></div>
-          <div style={{ position: "absolute", top: 0, left: 0 }}>
-            {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)}g)
+        {ft.unlockProgress && (
+          <div className="progress">
+            <div
+              style={{
+                width: starProgress + "%",
+                postition: "absolute",
+                top: 0,
+                left: 0,
+                height: "21px",
+                backgroundColor: "#151",
+              }}
+            ></div>
+            <div style={{ position: "absolute", top: 0, left: 0 }}>
+              {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)}g)
+            </div>
           </div>
-        </div>}
+        )}
       </div>
     );
   }
@@ -365,10 +448,18 @@ class App extends React.Component {
       star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
       stars[starIndex] = star;
       let updates = { stars: stars };
-      if (!state.featureTriggers.unlockMass) {
+      if (!state.featureTriggers.firstUpgrade) {
+        updates.featureTriggers = { ...state.featureTriggers };
+        updates.featureTriggers.firstUpgrade = true;
+        updates.logText = [...state.logText];
+        updates.logText.unshift(logTexts.firstUpgrade);
+      } else if (
+        name === "particleCount" &&
+        !state.featureTriggers.unlockMass
+      ) {
         updates.featureTriggers = { ...state.featureTriggers };
         updates.featureTriggers.unlockMass = true;
-        updates.logText = [...state.logText ]
+        updates.logText = [...state.logText];
         updates.logText.unshift(logTexts.unlockMass);
       }
       return updates;
@@ -484,7 +575,7 @@ class App extends React.Component {
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
     const ctx = canvas.getContext("2d", { alpha: false });
-    ctx.fillStyle = "#575757";
+    ctx.fillStyle = "#484848";
     ctx.fillRect(0, 0, w, h);
     ctx.beginPath();
     ctx.strokeStyle = "#333";
@@ -514,7 +605,12 @@ class App extends React.Component {
     ctx.arc(cx, cy, starRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.fillStyle = "#000";
+    let pCount = 0;
     for (const particle of field.particles) {
+      pCount++;
+      if (pCount > this.state.particleLimit) {
+        break;
+      }
       if (
         particle.x < -cx - pRad ||
         particle.x > cx + pRad ||
@@ -528,6 +624,7 @@ class App extends React.Component {
       ctx.fill();
     }
     ctx.strokeStyle = "#ff4";
+
     for (const photon of field.photons) {
       if (photon.x < -cx || photon.x > cx || photon.y < -cy || photon.y > cy) {
         continue;
@@ -638,6 +735,7 @@ class App extends React.Component {
       let vy = star.vy;
       let velocity = star.velocity;
       let drag = dragConstant;
+      let starDrag = starDragConstant;
       if (this.mouseClicked) {
         let distSq = this.mouseX * this.mouseX + this.mouseY * this.mouseY;
         let dist = distSq ** 0.5;
@@ -655,8 +753,16 @@ class App extends React.Component {
         }
       } else {
         let vMag = (vx * vx + vy * vy) ** 0.5;
-        if (vMag < 0.005) {
+        if (vMag < 10) {
+          starDrag *= 5;
+        }
+        if (vMag < 5) {
+          starDrag *= 10;
+        }
+        if (vMag < 1) {
           vx = vy = 0;
+          gConstant += star.mouseGravity;
+          drag *= star.mouseDrag;
         } else {
           let xSign = vx < 0 ? 1 : -1;
           let ySign = vy < 0 ? 1 : -1;
@@ -715,12 +821,14 @@ class App extends React.Component {
         if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
           dist = distSq ** 0.5;
-          field.photons.push({
-            x: (starRadius * p.x) / dist,
-            y: (starRadius * p.y) / dist,
-            vx: (1200 * p.x) / dist,
-            vy: (1200 * p.y) / dist,
-          });
+          if (field.photons.length < s.particleLimit) {
+            field.photons.push({
+              x: (starRadius * p.x) / dist,
+              y: (starRadius * p.y) / dist,
+              vx: (1200 * p.x) / dist,
+              vy: (1200 * p.y) / dist,
+            });
+          }
           this.genParticle(star, true, p);
           if (!updates.featureTriggers.firstPhoton) {
             updates.featureTriggers.firstPhoton = true;
@@ -757,7 +865,7 @@ function getRandomInt(max) {
   return Math.floor(Math.random() * Math.floor(max));
 }
 
-function itoa(num, noFrac, noFracFixed, unitSuffix='') {
+function itoa(num, noFrac, noFracFixed, unitSuffix = "") {
   if (num > 1e15) {
     let oom = Math.floor(Math.log(num) / Math.log(10));
     return (num / 10 ** oom).toFixed(2) + "e" + oom + unitSuffix;
@@ -778,11 +886,11 @@ function itoa(num, noFrac, noFracFixed, unitSuffix='') {
     base = 1e3;
   } else if (noFrac) {
     if (noFracFixed) {
-      return num.toFixed(noFracFixed)+ unitSuffix;
+      return num.toFixed(noFracFixed) + unitSuffix;
     }
-    return num.toFixed(0)+ unitSuffix;
+    return num.toFixed(0) + unitSuffix;
   }
-  return (num / base).toFixed(3) + suffix+ unitSuffix;
+  return (num / base).toFixed(3) + suffix + unitSuffix;
 }
 window.itoa = itoa;
 
