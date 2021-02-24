@@ -109,6 +109,15 @@ body {
   display: block;
 }
 
+#collapse {
+  text-align: center;
+}
+.collapse.button {
+  margin: auto;
+  margin-top: 20px;
+  padding: 10px;
+}
+
 .upgradeName {
   font-weight: bold;
 }
@@ -120,7 +129,10 @@ body {
   border: 1px #ddd solid;
   padding: 3px 5px;
   background-color: #222;
-  user-select: none; }
+  user-select: none;
+  margin-bottom: 5px;
+
+ }
 
 .milestone.disabled {
   background-color: #666

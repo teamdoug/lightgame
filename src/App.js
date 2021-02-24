@@ -13,20 +13,26 @@ const yellowCollapseMass = 1e33;
 //const blueCollapseMass = 1e30;
 const starDragConstant = 1;
 const photonUpgradeDef = {
+  particlePhotons: {
+    initialCost: 15,
+    costMultiplier: 2.35,
+    effect: 2,
+    levelCap: 23,
+    scalingCostMultiplier: 23.5,
+  },
   particleCount: {
     initialCost: 30,
     costMultiplier: 50,
     effect: 1.5,
-  },
-  particlePhotons: {
-    initialCost: 20,
-    costMultiplier: 2.35,
-    effect: 2,
+    levelCap: 5,
+    scalingCostMultiplier: 500,
   },
   particleMass: {
     initialCost: 40,
     costMultiplier: 2,
     effect: 6,
+    levelCap: 27,
+    scalingCostMultiplier: 15,
   },
 };
 const massMilestones = [
@@ -44,35 +50,59 @@ const massMilestones = [
     value: 1e10,
     name: "Tuned Gravity Field",
     description: "Increase the power the of gravity field by 50%",
+    unlockText:
+      "Your temporary gravity field has become significantly stronger.",
   },
   {
     value: 1e15,
     name: "Permanent Gravity Field",
     description: "The temporary gravity field always applies",
+    unlockText: "Your temporary gravity field seems quite misnamed now.",
   },
   {
     value: 1e20,
     name: "Ultra Gravity Field",
     description: "Increase the power the of gravity field by another 50%",
+    unlockText: "Your gravity field is more attractive than ever.",
   },
   {
     value: 1e25,
     name: "Stellar Collapse",
     description: "Unlock the ability to collapse into a star",
+    unlockText: "You made it. It's time to become a star.",
   },
 ];
+const collapseTimes = {
+  recolor: 2,
+  shrink: 4,
+  pause: 5,
+  expand: 5.05,
+  ring: 6,
+  revel: 12,
+};
+const collapseLengths = {
+  recolor: collapseTimes.recolor,
+  shrink: collapseTimes.shrink - collapseTimes.recolor,
+  pause: collapseTimes.pause - collapseTimes.shrink,
+  expand: collapseTimes.expand - collapseTimes.pause,
+  ring: collapseTimes.ring - collapseTimes.expand,
+  revel: collapseTimes.revel - collapseTimes.ring,
+};
 
 // unlock text for each milestone
+// implement level cap
+// implement stellar upgrade
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
 // TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
 // only setState once pper gameLoop
 // animate sun emitting photons
+// show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
 
 // Lower priority
 // TODO: Animate log/other things
-// TODO: Design next layer: star clusters/nebulas
+// TODO: Design next layer: star clusters/nebulas/constellations
 // setting to limit rendered particles
-
+// dark starfield as background, with stars equal to number of stars created?
 
 const logTexts = {
   opening: "The universe is dark.",
@@ -82,8 +112,10 @@ const logTexts = {
   firstUpgrade: "More photons for more upgrades.",
   unlockMass:
     "More particles means faster growth. Your size isn't increasing much, but you're absorbing some mass with each collision.",
-  unlockProgress:
-    "If you got big enough, you could collapse into a star. Stars generate a lot of photons.",
+  unlockCollapse:
+    "If you got big enough, you could collapse into a star. Stars are a constant source of photons.",
+  firstCollapse:
+    "You've become a star, and yet you realize, you are more than just this star. You are this universe, and you want to fill it with light.",
 };
 
 class App extends React.Component {
@@ -180,6 +212,8 @@ class App extends React.Component {
         gravity: 0,
       },
       milestonesUnlocked: 0,
+      collapsing: false,
+      collapseFrame: 0,
     };
     return star;
   };
@@ -195,18 +229,47 @@ class App extends React.Component {
   };
 
   getStarRadius = (star) => {
-    return (
+    const defaultRadius =
       20 +
-      (star.starRadiusFactor * Math.log(star.starMass / 10)) / Math.log(2000000)
-    );
+      (star.starRadiusFactor * Math.log(star.starMass / 10)) /
+        Math.log(2000000);
+    if (!star.collapsing || star.collapseFrame < collapseTimes.recolor) {
+      return defaultRadius;
+    }
+    if (star.collapseFrame < collapseTimes.shrink) {
+      return (
+        defaultRadius *
+        (1 -
+          (0.75 * (star.collapseFrame - collapseTimes.recolor)) /
+            collapseLengths.shrink)
+      );
+    } else if (star.collapseFrame < collapseTimes.pause) {
+      return defaultRadius * 0.25;
+    } else if (star.collapseFrame < collapseTimes.expand) {
+      return (
+        defaultRadius *
+        (0.25 +
+          (0.5 * (star.collapseFrame - collapseTimes.pause)) /
+            collapseLengths.expand)
+      );
+    }
+    return 0.75 * defaultRadius;
   };
 
   calcUpgradeCosts = (star) => {
     // TODO harsher scaling past 1e10 or something
     let costs = {};
     for (const [upgrade, props] of Object.entries(photonUpgradeDef)) {
-      costs[upgrade] =
-        props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
+      if (star.upgrades[upgrade] >= props.levelCap) {
+        costs[upgrade] =
+          props.initialCost *
+          props.costMultiplier ** props.levelCap *
+          props.scalingCostMultiplier **
+            (star.upgrades[upgrade] - props.levelCap);
+      } else {
+        costs[upgrade] =
+          props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
+      }
     }
     return costs;
   };
@@ -440,6 +503,22 @@ class App extends React.Component {
                       })}
                     </div>
                   )}
+                  {s.tab === "collapse" && (
+                    <div id="collapse">
+                      <div
+                        className={
+                          "collapse button" +
+                          (star.milestonesUnlocked < 5 ? " disabled" : "")
+                        }
+                        onClick={() => this.collapse(starIndex)}
+                      >
+                        <p>
+                          <span className="upgradeName">Collapse into a star</span>
+                        </p>
+                        
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -485,9 +564,11 @@ class App extends React.Component {
     this.setState((state) => {
       let stars = [...state.stars];
       let star = { ...state.stars[starIndex] };
+      if (star.collapsing) {
+        return {};
+      }
       star.upgrades = { ...star.upgrades };
       if (cost > star.photons) {
-        console.log("not buying");
         return {};
       }
       star.photons -= cost;
@@ -513,6 +594,17 @@ class App extends React.Component {
         star.particleRadius = (5 * star.particleMass) ** 0.3;
       }
       return updates;
+    });
+  };
+
+  collapse = (starIndex) => {
+    let stars = [...this.state.stars];
+    let star = { ...stars[starIndex] };
+    star.collapsing = true;
+    star.collapseFrame = 0;
+    stars[starIndex] = star;
+    this.setState({
+      stars: stars,
     });
   };
 
@@ -591,7 +683,7 @@ class App extends React.Component {
     return vel;
   };
 
-  getStarColor(mass, colorFrame) {
+  getStarColor(mass, colorFrame, collapseFrame) {
     let red, green, blue;
     if (mass <= collapseMass) {
       let ratio = Math.log(mass) / Math.log(collapseMass);
@@ -611,6 +703,23 @@ class App extends React.Component {
     let intensity = colorFrame / 5;
     if (colorFrame >= 5) {
       intensity = (10 - colorFrame) / 5;
+    }
+    if (collapseFrame) {
+      if (collapseFrame < collapseTimes.recolor) {
+        intensity *= 1 - collapseFrame / collapseLengths.recolor;
+      } else if (collapseFrame < collapseTimes.shrink) {
+        intensity =
+          (collapseFrame - collapseTimes.recolor) / collapseLengths.shrink;
+      } else if (collapseFrame < collapseTimes.pause) {
+        intensity = 1;
+      } else if (collapseFrame < collapseTimes.expand) {
+        intensity *=
+          1 +
+          0.2 *
+            ((collapseFrame - collapseTimes.pause) / collapseLengths.expand);
+      } else {
+        intensity = 1.2;
+      }
     }
     red = intensity * (red - 10) + 10;
     blue = intensity * blue;
@@ -650,31 +759,71 @@ class App extends React.Component {
       gridY += gridSpacing;
     }
 
-    ctx.fillStyle = this.getStarColor(star.starMass, field.colorFrame);
+    ctx.fillStyle = this.getStarColor(
+      star.starMass,
+      field.colorFrame,
+      star.collapseFrame
+    );
     ctx.beginPath();
+    if (star.collapsing && star.collapseFrame < collapseTimes.expand) {
+      cx += getRandomInt(4) - 2;
+      cy += getRandomInt(4) - 2;
+    }
     ctx.arc(cx, cy, starRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.fillStyle = "#000";
     let pCount = 0;
-    for (const particle of field.particles) {
-      pCount++;
-      if (pCount > this.state.particleLimit) {
-        break;
-      }
-      if (
-        particle.x < -cx - pRad ||
-        particle.x > cx + pRad ||
-        particle.y < -cy - pRad ||
-        particle.y > cy + pRad
-      ) {
-        continue;
-      }
-      ctx.beginPath();
-      ctx.arc(particle.x + cx, particle.y + cy, pRad, 0, 2 * Math.PI);
-      ctx.fill();
+    let ringSize = 0,
+      ringSizeSq = 0;
+    if (
+      star.collapsing &&
+      star.collapseFrame >= collapseTimes.expand &&
+      star.collapseFrame < collapseTimes.ring
+    ) {
+      ringSize = this.getCollapseRingSize(star.collapseFrame, starRadius);
+      ringSizeSq = ringSize ** 2;
     }
-    ctx.strokeStyle = "#ff4";
+    if (!star.collapsing || star.collapseFrame <= collapseTimes.ring) {
+      for (const particle of field.particles) {
+        pCount++;
+        if (pCount > this.state.particleLimit) {
+          break;
+        }
+        if (
+          particle.x < -cx - pRad ||
+          particle.x > cx + pRad ||
+          particle.y < -cy - pRad ||
+          particle.y > cy + pRad
+        ) {
+          continue;
+        }
+        if (ringSizeSq && particle.x ** 2 + particle.y ** 2 < ringSizeSq) {
+          continue;
+        }
+        ctx.beginPath();
+        ctx.arc(particle.x + cx, particle.y + cy, pRad, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
 
+    if (
+      star.collapsing &&
+      star.collapseFrame >= collapseTimes.expand &&
+      star.collapseFrame < collapseTimes.ring
+    ) {
+      ctx.strokeStyle = "#ff4";
+      ctx.beginPath();
+      ctx.arc(
+        cx,
+        cy,
+        this.getCollapseRingSize(star.collapseFrame, starRadius),
+        0,
+        2 * Math.PI
+      );
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = "#ff4";
     for (const photon of field.photons) {
       if (photon.x < -cx || photon.x > cx || photon.y < -cy || photon.y > cy) {
         continue;
@@ -760,6 +909,15 @@ class App extends React.Component {
     this.setState({ paused: !this.state.paused });
   };
 
+  getCollapseRingSize = (collapseFrame, radius) => {
+    const maxSize = Math.max(maxWidth, maxHeight) * 2;
+    return (
+      radius +
+      ((collapseFrame - collapseTimes.expand) / collapseLengths.ring) *
+        (maxSize - radius)
+    );
+  };
+
   update = (delta, debugFrame) => {
     let s = this.state;
     let relDelta = delta / 1000;
@@ -789,7 +947,7 @@ class App extends React.Component {
       let drag = dragConstant;
       let starDrag = starDragConstant;
       let milestonesUnlocked = star.milestonesUnlocked;
-      if (this.mouseClicked) {
+      if (!star.collapsing && this.mouseClicked) {
         let distSq = this.mouseX * this.mouseX + this.mouseY * this.mouseY;
         let dist = distSq ** 0.5;
         let scale = 1;
@@ -817,7 +975,7 @@ class App extends React.Component {
         }
       } else {
         let vMag = (vx * vx + vy * vy) ** 0.5;
-        if (vMag < 10) {
+        if (star.collapsing || vMag < 10) {
           starDrag *= 5;
         }
         if (vMag < 5) {
@@ -895,24 +1053,31 @@ class App extends React.Component {
         if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
           dist = distSq ** 0.5;
-          if (field.photons.length < s.particleLimit) {
-            field.photons.push({
-              x: (starRadius * p.x) / dist,
-              y: (starRadius * p.y) / dist,
-              vx: (1200 * p.x) / dist,
-              vy: (1200 * p.y) / dist,
-            });
-          }
+          let photon = {
+            x: (starRadius * p.x) / dist,
+            y: (starRadius * p.y) / dist,
+            vx: (1200 * p.x) / dist,
+            vy: (1200 * p.y) / dist,
+          };
+
           this.genParticle(star, true, p);
           if (!updates.featureTriggers.firstPhoton) {
             updates.featureTriggers.firstPhoton = true;
             updates.logText.unshift(logTexts.firstPhoton);
           }
-          newMass += star.particleMass;
+          if (field.photons.length < s.particleLimit) {
+            field.photons.push(photon);
+          }
           newPhotons += star.particlePhotons;
           if (!updates.featureTriggers.unlockUpgrades && newPhotons >= 10) {
             updates.featureTriggers.unlockUpgrades = true;
             updates.logText.unshift(logTexts.unlockUpgrades);
+          }
+          // Don't update mass while collapsing just in case...
+          if (!star.collapsing ) {
+
+            newMass += star.particleMass;
+
           }
         }
         while (
@@ -929,13 +1094,40 @@ class App extends React.Component {
             );
           }
           milestonesUnlocked++;
-          if (milestonesUnlocked >= 5 && !updates.featureTriggers.unlockCollapse) {
+          if (
+            milestonesUnlocked >= 5 &&
+            !updates.featureTriggers.unlockCollapse
+          ) {
             updates.featureTriggers.unlockCollapse = true;
           }
         }
       }
-      for (let i = field.particles.length; i < star.particleCount; i++) {
-        field.particles.push(this.genParticle(star, false));
+      if (!star.collapsing) {
+        for (let i = field.particles.length; i < star.particleCount; i++) {
+          field.particles.push(this.genParticle(star, false));
+        }
+      }
+      if (star.collapsing) {
+        if (star.collapseFrame >= collapseTimes.expand) {
+          for (let i = field.photons.length; i < s.particleLimit; i++) {
+            let angle = Math.random() * 2 * Math.PI;
+            let x = starRadius * Math.cos(angle);
+            let y = starRadius * Math.sin(angle);
+            field.photons.push({
+              x: x,
+              y: y,
+              vx: (1200 * x) / starRadius,
+              vy: (1200 * y) / starRadius,
+            });
+          }
+        }
+        star.collapseFrame += relDelta;
+        if (star.collapseFrame > collapseTimes.revel) {
+          star.collapsing = false;
+          updates.collapseCount++;
+          updates.featureTriggers.firstCollapse = true;
+          // TODO other collapse accounting like moving to completed stars and destroying field
+        }
       }
 
       updates.stars.push({
