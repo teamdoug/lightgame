@@ -62,20 +62,17 @@ const massMilestones = [
   },
 ];
 
-// TODO: Add upgrades, starting with particleCount + 50%
-// TODO: Reveal mass at 12 mass? Show progress bar? Maybe progress bar later... Or an interim progress bar?
-// TODO: mousegravity behind an upgrade. upgrade again for permanent. upgrades for power?
+// unlock text for each milestone
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
 // TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
-// Mouse gravity partially multiplicative (as an upgrade?)
 // only setState once pper gameLoop
 // animate sun emitting photons
-// setting to limit rendered particles
 
 // Lower priority
 // TODO: Animate log/other things
 // TODO: Design next layer: star clusters/nebulas
-// TODO: Options to control star drag?
+// setting to limit rendered particles
+
 
 const logTexts = {
   opening: "The universe is dark.",
