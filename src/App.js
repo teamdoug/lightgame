@@ -18,6 +18,7 @@ const photonUpgradeDef = {
     costMultiplier: 2.35,
     effect: 2,
     levelCap: 23,
+    scalingLevel: 24,
     scalingCostMultiplier: 23.5,
   },
   particleCount: {
@@ -25,6 +26,7 @@ const photonUpgradeDef = {
     costMultiplier: 50,
     effect: 1.5,
     levelCap: 5,
+    scalingLevel: 6,
     scalingCostMultiplier: 500,
   },
   particleMass: {
@@ -32,6 +34,7 @@ const photonUpgradeDef = {
     costMultiplier: 2,
     effect: 6,
     levelCap: 27,
+    scalingLevel: 28,
     scalingCostMultiplier: 15,
   },
 };
@@ -89,13 +92,11 @@ const collapseLengths = {
   revel: collapseTimes.revel - collapseTimes.ring,
 };
 
-// unlock text for each milestone
 // implement level cap
 // implement stellar upgrade
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
 // TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
 // only setState once pper gameLoop
-// animate sun emitting photons
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
 
 // Lower priority
@@ -103,6 +104,7 @@ const collapseLengths = {
 // TODO: Design next layer: star clusters/nebulas/constellations
 // setting to limit rendered particles
 // dark starfield as background, with stars equal to number of stars created?
+// better itoa including truncing or rounding up
 
 const logTexts = {
   opening: "The universe is dark.",
@@ -831,8 +833,8 @@ class App extends React.Component {
       ctx.beginPath();
       ctx.moveTo(photon.x + cx, photon.y + cy);
       ctx.lineTo(
-        photon.x + cx + photon.vx / 50,
-        photon.y + cy + photon.vy / 50
+        photon.x + cx + photon.vx / 60,
+        photon.y + cy + photon.vy / 60,
       );
       ctx.stroke();
     }
