@@ -177,13 +177,14 @@ const collapseLengths = {
 // prevent creating protostars when too many stars or replace existing? via supernova?
 // darker background. lighter particles. light up particles from sun?
 // option to disable sun light?
-// center star for galaxy?
 // automate collapsing etc?
 // math descriptions
 // big particles?
-// autocreate new protostars
 // moving ai?
 // prevent unlocking second protostar unless stellar milestone 2 reached
+// stellar milestones 3/5/10
+// stellar mas milestones 1e4/1e7
+// constellations give a multiplicative bonus (e.g. * # stars or even ** (sqrt(# stars))
 
 // Lower priority
 // TODO: Animate log/other things
@@ -428,10 +429,10 @@ class App extends React.Component {
       //console.log('costs',interstellarUpgradeCosts);
     }
     let winProgress =
-    (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
-  if (winProgress > 100) {
-    winProgress = 100;
-  }
+      (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
+    if (winProgress > 100) {
+      winProgress = 100;
+    }
 
     return (
       <div id="verticalFlex">
@@ -509,7 +510,7 @@ class App extends React.Component {
                       <span className="headerValue">
                         {itoa(star.photons, true)}
                       </span>{" "}
-                      photon{star.photons > 1 ? 's':''}
+                      photon{star.photons > 1 ? "s" : ""}
                     </span>
                   )}
                   {ft.unlockMass && (
@@ -744,7 +745,8 @@ class App extends React.Component {
                     <span className="headerValue">
                       {itoa(s.interstellar.photons, true)}
                     </span>{" "}
-                    interstellar photon{s.interstellar.photons > 1 ? 's':''} (+
+                    interstellar photon{s.interstellar.photons > 1 ? "s" : ""}{" "}
+                    (+
                     {itoa(this.interstellarPhotonIncome, true)}/s)
                   </span>
                   {ft.unlockMass && (
@@ -790,7 +792,9 @@ class App extends React.Component {
                     <div
                       className={
                         "tab " +
-                        (s.interstellarTab === "stellarMilestones" ? "selected" : "")
+                        (s.interstellarTab === "stellarMilestones"
+                          ? "selected"
+                          : "")
                       }
                       onClick={() =>
                         this.setState({ interstellarTab: "stellarMilestones" })
@@ -928,7 +932,8 @@ class App extends React.Component {
                             <div
                               className={
                                 "milestone" +
-                                (msIndex >= s.interstellar.stellarMilestonesUnlocked
+                                (msIndex >=
+                                s.interstellar.stellarMilestonesUnlocked
                                   ? " disabled"
                                   : "")
                               }
@@ -937,7 +942,10 @@ class App extends React.Component {
                                 <span className="upgradeName">
                                   {milestone.name}
                                 </span>
-                                {" " + itoa(milestone.value, true) + " star" + (milestone.value > 1 ? 's':'')}
+                                {" " +
+                                  itoa(milestone.value, true) +
+                                  " star" +
+                                  (milestone.value > 1 ? "s" : "")}
                               </p>
                               <p className="upgradeDesc">
                                 {milestone.description}
@@ -979,7 +987,8 @@ class App extends React.Component {
               }}
             ></div>
             <div style={{ position: "absolute", top: 0, left: 0 }}>
-              {winProgress.toFixed(2)}% to Lighting up the Universe (1e20 interstellar photons/s)
+              {winProgress.toFixed(2)}% to Lighting up the Universe (1e20
+              interstellar photons/s)
             </div>
           </div>
         )}
@@ -998,27 +1007,33 @@ class App extends React.Component {
       if (cost.cost > star.photons) {
         return {};
       }
-      star.photons -= cost.cost;
-      star.upgrades[name] += 1;
-      star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
-      stars[starIndex] = star;
       let updates = { stars: stars };
-      if (!state.featureTriggers.firstUpgrade) {
-        updates.featureTriggers = { ...state.featureTriggers };
-        updates.featureTriggers.firstUpgrade = true;
-        updates.logText = [...state.logText];
-        updates.logText.unshift(logTexts.firstUpgrade);
-      } else if (
-        name === "particleCount" &&
-        !state.featureTriggers.unlockMass
-      ) {
-        updates.featureTriggers = { ...state.featureTriggers };
-        updates.featureTriggers.unlockMass = true;
-        updates.logText = [...state.logText];
-        updates.logText.unshift(logTexts.unlockMass);
-      }
-      if (name === "particleMass") {
-        star.particleRadius = (5 * star.particleMass) ** 0.3;
+      while (cost.cost < star.photons) {
+        star.photons -= cost.cost;
+        star.upgrades[name] += 1;
+        star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
+        stars[starIndex] = star;
+        if (!state.featureTriggers.firstUpgrade) {
+          updates.featureTriggers = { ...state.featureTriggers };
+          updates.featureTriggers.firstUpgrade = true;
+          updates.logText = [...state.logText];
+          updates.logText.unshift(logTexts.firstUpgrade);
+        } else if (
+          name === "particleCount" &&
+          !state.featureTriggers.unlockMass
+        ) {
+          updates.featureTriggers = { ...state.featureTriggers };
+          updates.featureTriggers.unlockMass = true;
+          updates.logText = [...state.logText];
+          updates.logText.unshift(logTexts.unlockMass);
+        }
+        if (name === "particleMass") {
+          star.particleRadius = (5 * star.particleMass) ** 0.3;
+        }
+        if(state.interstellar.stellarMilestonesUnlocked < 1) {
+          return updates;
+        }
+        cost = this.calcUpgradeCosts(star)[name]
       }
       return updates;
     });
@@ -1654,7 +1669,8 @@ class App extends React.Component {
     });
     updates.interstellar.collapseCount++;
     while (
-      updates.interstellar.stellarMilestonesUnlocked < stellarMilestones.length &&
+      updates.interstellar.stellarMilestonesUnlocked <
+        stellarMilestones.length &&
       updates.interstellar.collapseCount >=
         stellarMilestones[updates.interstellar.stellarMilestonesUnlocked].value
     ) {
@@ -1664,13 +1680,12 @@ class App extends React.Component {
       updates.headerTab = "interstellar";
       star.collapsed = true;
       this.fields.splice(starIndex, 1); // fix this
-      stars.splice(starIndex, 1)
+      stars.splice(starIndex, 1);
     } else {
-      updates.tab = 'upgrades'
+      updates.tab = "upgrades";
       stars[starIndex] = this.getInitStar();
       this.fields[starIndex] = this.getInitField(stars[starIndex]);
     }
-
   };
 }
 
