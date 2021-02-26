@@ -18,24 +18,24 @@ const photonUpgradeDef = {
     costMultiplier: 2.35,
     effect: 2,
     levelCap: 23,
-    scalingLevel: 24,
-    scalingCostMultiplier: 23.5,
+    scalingLevel: 23,
+    scalingCostExponent: 1.3,
   },
   particleCount: {
     initialCost: 30,
     costMultiplier: 50,
     effect: 1.5,
     levelCap: 5,
-    scalingLevel: 6,
-    scalingCostMultiplier: 500,
+    scalingLevel: 5,
+    scalingCostExponent: 1.5,
   },
   particleMass: {
     initialCost: 40,
     costMultiplier: 2,
     effect: 6,
     levelCap: 27,
-    scalingLevel: 28,
-    scalingCostMultiplier: 15,
+    scalingLevel: 27,
+    scalingCostExponent: 1.4,
   },
 };
 const massMilestones = [
@@ -151,12 +151,15 @@ const collapseLengths = {
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
 // stellar nursery
 // more interstellar upgrades. starting bonuses? gravity? drag? speed up collapse animation?
-// prevent creating protostars when too many stars
+// prevent creating protostars when too many stars or replace existing? via supernova?
 // darker background. lighter particles. light up particles from sun?
 // option to disable sun light?
 // center star for galaxy?
 // automate collapsing etc?
-// make photon upgrade scaling scale instead of abrupt
+// math descriptions
+// big particles?
+// autocreate new protostars
+// moving ai?
 
 // Lower priority
 // TODO: Animate log/other things
@@ -265,7 +268,10 @@ class App extends React.Component {
       particleMass: 1,
       particleRadius: 3,
       particleCount: 50,
-      particlePhotons: 1 * photonUpgradeDef.particlePhotons.effect ** interstellar.upgrades.bonusParticlePhotons,
+      particlePhotons:
+        1 *
+        photonUpgradeDef.particlePhotons.effect **
+          interstellar.upgrades.bonusParticlePhotons,
       vx: 50,
       vy: 0,
       gridX: 0,
@@ -335,8 +341,8 @@ class App extends React.Component {
         cost =
           props.initialCost *
           props.costMultiplier ** props.scalingLevel *
-          props.scalingCostMultiplier **
-            (star.upgrades[upgrade] - props.scalingLevel);
+          props.costMultiplier **
+            ((star.upgrades[upgrade] - props.scalingLevel)**props.scalingCostExponent);
       } else {
         cost =
           props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
@@ -345,7 +351,7 @@ class App extends React.Component {
         cost: cost,
         capped:
           star.upgrades[upgrade] >= props.levelCap &&
-          this.interstellar.milestonesUnlocked < 1,
+          this.state.interstellar.milestonesUnlocked < 1,
       };
     }
     return costs;
@@ -972,7 +978,10 @@ class App extends React.Component {
           if (id === "bonusParticlePhotons") {
             star.particlePhotons *= photonUpgradeDef.particlePhotons.effect;
           } else if (id === "permanentMilestones") {
-            star.milestonesUnlocked = Math.max(interstellar.upgrades[id], star.milestonesUnlocked);
+            star.milestonesUnlocked = Math.max(
+              interstellar.upgrades[id],
+              star.milestonesUnlocked
+            );
           }
           return star;
         }),
@@ -1332,6 +1341,14 @@ class App extends React.Component {
       s.interstellar.completedStars.reduce(addMass, 0) +
       s.interstellar.completedConstellations.reduce(addMass, 0) +
       s.interstellar.completedGalaxies.reduce(addMass, 0);
+    while (
+      updates.interstellar.milestonesUnlocked < stellarMilestones.length &&
+      this.interstellarMass >=
+        stellarMilestones[updates.interstellar.milestonesUnlocked].value
+    ) {
+      updates.interstellar.milestonesUnlocked++;
+    }
+
     this.interstellarPhotonIncome = 10 * (this.interstellarMass / 5e24) ** 0.5;
     updates.interstellar.photons += this.interstellarPhotonIncome * relDelta;
     const dragConstant = 0.0005;
@@ -1348,7 +1365,7 @@ class App extends React.Component {
       field.colorFrame = (field.colorFrame + relDelta) % 10;
       let gConstant = (gravity * Math.log(star.starMass)) / Math.log(20);
       let newMass = star.starMass;
-      let newPhotons = star.photons;
+      let newPhotons = star.photons + this.interstellarPhotonIncome**.5;
       let vx = star.vx;
       let vy = star.vy;
       let velocity = star.velocity;
@@ -1510,7 +1527,7 @@ class App extends React.Component {
       }
       if (!star.collapsing) {
         for (let i = field.particles.length; i < star.particleCount; i++) {
-          field.particles.push(this.genParticle(star, false));
+          field.particles.push(this.genParticle(star, true));
         }
       }
       let collapsed = false;
@@ -1554,12 +1571,12 @@ class App extends React.Component {
   createProtostar = () => {
     this.setState((state) => {
       let stars = [...state.stars];
-      let star  = this.getInitStar();
+      let star = this.getInitStar();
       stars.push(star);
       this.fields.push(this.getInitField(star));
-      return {stars: stars, headerTab: 'protostar', tab:'upgrades'};
-    }, this.resizeCanvas)
-  }
+      return { stars: stars, headerTab: "protostar", tab: "upgrades" };
+    }, this.resizeCanvas);
+  };
 
   finishCollapse = (star, starIndex, updates) => {
     updates.headerTab = "interstellar";
