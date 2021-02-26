@@ -19,7 +19,7 @@ const photonUpgradeDef = {
     effect: 2,
     levelCap: 23,
     scalingLevel: 23,
-    scalingCostExponent: 1.3,
+    scalingCostExponent: 1.25,
   },
   particleCount: {
     initialCost: 30,
@@ -27,7 +27,7 @@ const photonUpgradeDef = {
     effect: 1.5,
     levelCap: 5,
     scalingLevel: 5,
-    scalingCostExponent: 2,
+    scalingCostExponent: 2.5,
   },
   particleMass: {
     initialCost: 40,
@@ -35,7 +35,7 @@ const photonUpgradeDef = {
     effect: 6,
     levelCap: 27,
     scalingLevel: 27,
-    scalingCostExponent: 1.4,
+    scalingCostExponent: 1.35,
   },
 };
 const massMilestones = [
@@ -81,7 +81,7 @@ const interstellarUpgradeDef = [
     name: "Bonus Particle Photon Upgrades",
     description: "Provides a free Particle Photon upgrade to each protostar",
     initialCost: 15,
-    costMultiplier: 50,
+    costMultiplier: 30,
     scalingLevel: 10,
     scalingCostMultiplier: 200,
   },
@@ -89,7 +89,7 @@ const interstellarUpgradeDef = [
     id: "permanentMilestones",
     name: "Permanent Protostar Mass Milestones",
     description:
-      "Permanently unlock a mass milestone for each level of this upgrade",
+      "Permanently unlock a protostar mass milestone for each level of this upgrade",
     initialCost: 150,
     costMultiplier: 50,
     levelCap: 4,
@@ -103,15 +103,21 @@ const stellarMassMilestones = [
       "Protostar photon upgrades no longer have a level cap, but they scale much worse shortly after the previous cap",
   },
   {
-    value: 1e4 * collapseMass,
+    value: 1e6 * collapseMass,
     name: "Second Protostar",
     description: "You can now develop two protostars simultaneously",
   },
   {
-    value: 1e7 * collapseMass,
+    value: 5e7 * collapseMass,
     name: "Unlock Bonus Particle Mass",
     description:
       "Unlock an interstellar upgrade to give bonus levels to particle mass",
+  },
+  {
+    value: 2e9 * collapseMass,
+    name: "Improve protostar upgrade scaling",
+    description:
+      "Reduces the rate at which protostar upgrades get more expensive",
   },
 ];
 const stellarMilestones = [
@@ -137,10 +143,15 @@ const stellarMilestones = [
     description: "Speed up the star collapse animation",
   },
   {
-    value: 10,
+    value: 8,
     name: "Constellations",
     description:
       "You can merge stars into constellations, providing more space for protostars and significant interstellar photon gains",
+  },
+  {
+    value: 15,
+    name: "Auto-Collapse",
+    description: "You can set protostars to auto-collapse",
   },
 ];
 /*
@@ -181,10 +192,11 @@ const collapseLengths = {
 // math descriptions
 // big particles?
 // moving ai?
-// prevent unlocking second protostar unless stellar milestone 2 reached
 // stellar milestones 3/5/10
 // stellar mas milestones 1e4/1e7
 // constellations give a multiplicative bonus (e.g. * # stars or even ** (sqrt(# stars))
+// stats page (or show # of stars on stellar milestones)
+// hotkeys
 
 // Lower priority
 // TODO: Animate log/other things
@@ -255,7 +267,7 @@ class App extends React.Component {
   getInitState = () => {
     let state = {
       paused: false,
-      stars: [this.getInitStar()],
+      stars: [],
       logText: [logTexts.opening],
       headerTab: "protostar",
       interstellarTab: "info",
@@ -283,11 +295,12 @@ class App extends React.Component {
         firstCollapse: false,
       },
     };
+    state.stars.push(this.getInitStar(state));
     return state;
   };
 
-  getInitStar = () => {
-    let interstellar = this.state.interstellar;
+  getInitStar = (state) => {
+    let interstellar = state.interstellar;
     let star = {
       photons: 0,
       starMass: 10,
@@ -413,12 +426,14 @@ class App extends React.Component {
     let star = s.stars[starIndex];
     let field = this.fields[starIndex];
     let ft = s.featureTriggers;
-    const canvas = this.canvas.current;
-    if (canvas !== null && s.headerTab === "protostar") {
-      this.drawCanvas(canvas, star, field);
-    }
+
     let upgradeCosts, interstellarUpgradeCosts;
     if (s.headerTab === "protostar") {
+      upgradeCosts = this.calcUpgradeCosts(star);
+    } else if (s.headerTab === "protostar2") {
+      starIndex = 1;
+      star = s.stars[starIndex];
+      field = this.fields[starIndex];
       upgradeCosts = this.calcUpgradeCosts(star);
     } else {
       if (s.headerTab === "protostar") {
@@ -428,11 +443,17 @@ class App extends React.Component {
       interstellarUpgradeCosts = this.calcInterstellarUpgradeCosts();
       //console.log('costs',interstellarUpgradeCosts);
     }
+    let showProtostar = s.headerTab === "protostar" || s.headerTab === "protostar2"
+    const canvas = this.canvas.current;
+    if (canvas !== null && showProtostar) {
+      this.drawCanvas(canvas, star, field);
+    }
     let winProgress =
       (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
     if (winProgress > 100) {
       winProgress = 100;
     }
+    let secondProtostar = s.interstellar.milestonesUnlocked >= 2;
 
     return (
       <div id="verticalFlex">
@@ -456,8 +477,28 @@ class App extends React.Component {
                     );
                   }}
                 >
-                  Protostar
+                  Protostar{secondProtostar && " #1"}
                 </div>
+                {secondProtostar && (
+                  <div
+                    className={
+                      "button " +
+                      (s.stars.length === 0 ? "disabled " : "") +
+                      (s.headerTab === "protostar2" ? "selected " : "")
+                    }
+                    onClick={() => {
+                      if (s.stars.length === 0) {
+                        return;
+                      }
+                      this.setState(
+                        { headerTab: "protostar2" },
+                        this.resizeCanvas
+                      );
+                    }}
+                  >
+                    Protostar #2
+                  </div>
+                )}
                 <div
                   className={
                     "button " +
@@ -502,7 +543,7 @@ class App extends React.Component {
 
         <div id="flex">
           <div className="panel" id="leftPanel">
-            {s.headerTab === "protostar" && (
+            {showProtostar && (
               <>
                 <div className="panelHeader">
                   {ft.firstPhoton && (
@@ -540,19 +581,10 @@ class App extends React.Component {
                           Mass Milestones
                         </div>
                       )}
-                      {ft.unlockCollapse && (
-                        <div
-                          className={
-                            "tab " + (s.tab === "collapse" ? "selected" : "")
-                          }
-                          onClick={() => this.setState({ tab: "collapse" })}
-                        >
-                          Collapse
-                        </div>
-                      )}
                     </div>
                     <div className="tabPane">
                       {s.tab === "upgrades" && (
+                        <>
                         <div id="upgrades">
                           <div
                             className={
@@ -666,6 +698,24 @@ class App extends React.Component {
                             </div>
                           )}
                         </div>
+                         {ft.unlockCollapse && (
+                          <div id="collapse">
+                            <div
+                              className={
+                                "collapse button" +
+                                (star.milestonesUnlocked < 5 ? " disabled" : "")
+                              }
+                              onClick={() => this.collapse(starIndex)}
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  Collapse into a star
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        </>
                       )}
                       {s.tab === "milestones" && (
                         <div id="milestones">
@@ -709,23 +759,7 @@ class App extends React.Component {
                           })}
                         </div>
                       )}
-                      {s.tab === "collapse" && (
-                        <div id="collapse">
-                          <div
-                            className={
-                              "collapse button" +
-                              (star.milestonesUnlocked < 5 ? " disabled" : "")
-                            }
-                            onClick={() => this.collapse(starIndex)}
-                          >
-                            <p>
-                              <span className="upgradeName">
-                                Collapse into a star
-                              </span>
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                     
                     </div>
                   </div>
                 )}
@@ -961,7 +995,7 @@ class App extends React.Component {
             )}
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
-            {s.headerTab === "protostar" && (
+            {showProtostar && (
               <canvas
                 className="starfield"
                 ref={this.canvas}
@@ -1030,10 +1064,10 @@ class App extends React.Component {
         if (name === "particleMass") {
           star.particleRadius = (5 * star.particleMass) ** 0.3;
         }
-        if(state.interstellar.stellarMilestonesUnlocked < 1) {
+        if (state.interstellar.stellarMilestonesUnlocked < 1) {
           return updates;
         }
-        cost = this.calcUpgradeCosts(star)[name]
+        cost = this.calcUpgradeCosts(star)[name];
       }
       return updates;
     });
@@ -1426,12 +1460,22 @@ class App extends React.Component {
         stellarMassMilestones[updates.interstellar.milestonesUnlocked].value
     ) {
       updates.interstellar.milestonesUnlocked++;
+      if (updates.interstellar.milestonesUnlocked === 2 && updates.interstellar.stellarMilestonesUnlocked >= 2) {
+        let star = this.getInitStar(updates);
+        this.fields.push(this.getInitField(star));
+        updates.stars.push(star);
+      }
     }
 
     this.interstellarPhotonIncome = 10 * (this.interstellarMass / 5e24);
     updates.interstellar.photons += this.interstellarPhotonIncome * relDelta;
     const dragConstant = 0.0005;
-    for (let [index, star] of this.state.stars.entries()) {
+    let visibleStarIndex = -1;
+    if (s.headerTab === 'protostar') {
+      visibleStarIndex  = 0
+    } else if (s.headerTab === 'protostar2') {
+      visibleStarIndex  = 1} 
+    for (let [index, star] of updates.stars.entries()) {
       star.particleRadius =
         (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
       let field = this.fields[index];
@@ -1451,7 +1495,7 @@ class App extends React.Component {
       let drag = dragConstant;
       let starDrag = starDragConstant;
       let milestonesUnlocked = star.milestonesUnlocked;
-      if (!star.collapsing && this.mouseClicked) {
+      if (!star.collapsing && this.mouseClicked && visibleStarIndex === index) {
         let distSq = this.mouseX * this.mouseX + this.mouseY * this.mouseY;
         let dist = distSq ** 0.5;
         let scale = 1;
@@ -1650,7 +1694,7 @@ class App extends React.Component {
   createProtostar = () => {
     this.setState((state) => {
       let stars = [...state.stars];
-      let star = this.getInitStar();
+      let star = this.getInitStar(state);
       stars.push(star);
       this.fields.push(this.getInitField(star));
       return { stars: stars, headerTab: "protostar", tab: "upgrades" };
@@ -1675,15 +1719,23 @@ class App extends React.Component {
         stellarMilestones[updates.interstellar.stellarMilestonesUnlocked].value
     ) {
       updates.interstellar.stellarMilestonesUnlocked++;
+      if (
+        updates.interstellar.milestonesUnlocked >= 2 &&
+        updates.stars.length === 1
+      ) {
+        let newStar = this.getInitStar(updates);
+        this.fields.push(this.getInitField(newStar));
+        updates.stars.push(star);
+      }
     }
     if (updates.interstellar.stellarMilestonesUnlocked < 2) {
       updates.headerTab = "interstellar";
       star.collapsed = true;
-      this.fields.splice(starIndex, 1); // fix this
+      this.fields.splice(starIndex, 1);
       stars.splice(starIndex, 1);
     } else {
       updates.tab = "upgrades";
-      stars[starIndex] = this.getInitStar();
+      stars[starIndex] = this.getInitStar(updates);
       this.fields[starIndex] = this.getInitField(stars[starIndex]);
     }
   };
