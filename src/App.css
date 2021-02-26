@@ -19,11 +19,11 @@ body {
   font-size: larger;
   display: flex;
   justify-content: space-between;
-  width: 100%
+  width: 100%;
 }
 
 .header .button {
-  margin-right: 5px
+  margin-right: 5px;
 }
 
 .header .button.selected {
@@ -44,9 +44,8 @@ body {
 
 .headerValue {
   font-size: x-large;
-  font-weight: bold
+  font-weight: bold;
 }
-
 
 .headerElement {
   margin-right: 15px;
@@ -68,7 +67,6 @@ body {
 .panel {
   background-color: #484848;
   /*min-height: 100%;*/
-  
 }
 
 #leftPanel {
@@ -77,7 +75,7 @@ body {
   padding: 5px;
   min-height: calc(100vh - 117px);
   max-height: calc(100vh - 117px);
-  position:relative;
+  position: relative;
   overflow: hidden;
 }
 
@@ -119,10 +117,11 @@ body {
   padding: 3px 5px;
   background-color: #222;
   cursor: pointer;
-  user-select: none; 
+  user-select: none;
 }
 
-.button p, .milestone p {
+.button p,
+.milestone p {
   margin: 0px;
 }
 
@@ -132,12 +131,36 @@ body {
 
 .button.disabled {
   color: #bbb;
-  background-color: #666
+  background-color: #666;
+}
+
+#upgrades .wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.autobuyer {
+  flex-basis: 15%;
+  margin-bottom: 5px;
+  display: flex;
+  flex-direction: column;
+}
+
+.autobuyer.enabled {
+  background-color: #151;
+}
+
+.autobuyer.enabled:hover {
+  background-color: #1d8a1d;
+}
+
+.autobuyer p {
+  margin: auto;
 }
 
 .upgrade.button {
   margin-bottom: 5px;
-  display: block;
 }
 
 #collapse {
@@ -162,11 +185,10 @@ body {
   background-color: #222;
   user-select: none;
   margin-bottom: 5px;
-
- }
+}
 
 .milestone.disabled {
-  background-color: #666
+  background-color: #666;
 }
 
 .tabs {
