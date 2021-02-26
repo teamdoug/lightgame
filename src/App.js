@@ -8,7 +8,7 @@ const velocityCap = 400;
 const accelerationCap = 300;
 const gravity = 200000;
 const mouseAcceleration = 300;
-const collapseMass = 1e25;
+const collapseMass = 5e24;
 const yellowCollapseMass = 1e33;
 //const blueCollapseMass = 1e30;
 const starDragConstant = 1;
@@ -69,19 +69,74 @@ const massMilestones = [
     unlockText: "Your gravity field is more attractive than ever.",
   },
   {
-    value: 1e25,
+    value: collapseMass,
     name: "Stellar Collapse",
     description: "Unlock the ability to collapse into a star",
     unlockText: "You made it. It's time to become a star.",
   },
 ];
+const interstellarUpgradeDef = [
+  {
+    id: "bonusParticlePhotons",
+    name: "Bonus Particle Photon Upgrades",
+    description: "Provides a free Particle Photon upgrade to each protostar",
+    initialCost: 15,
+    costMultiplier: 50,
+    scalingLevel: 10,
+    scalingCostMultiplier: 200,
+  },
+  {
+    id: "permanentMilestones",
+    name: "Permanent Protostar Mass Milestones",
+    description:
+      "Permanently unlock a mass milestone for each level of this upgrade",
+    initialCost: 150,
+    costMultiplier: 50,
+    levelCap: 4,
+  },
+];
+const stellarMilestones = [
+  {
+    value: collapseMass,
+    name: "Continued Growth",
+    description:
+      "Protostar photon upgrades no longer have a level cap, but they scale much worse shortly after the previous cap",
+  },
+  {
+    value: 5 * collapseMass,
+    name: "Autobuyers",
+    description: "You can enable autobuyers for protostar photon upgrades",
+  },
+  {
+    value: 10 * collapseMass,
+    name: "Constellations",
+    description:
+      "You can merge stars into constellations, providing significant interstellar photon gains",
+  },
+  {
+    value: 100 * collapseMass,
+    name: "Galaxies",
+    description:
+      "You can merge constellations into galaxies, providing even more insterstellar photon gains",
+  },
+];
+/*
 const collapseTimes = {
   recolor: 2,
   shrink: 4,
   pause: 5,
   expand: 5.05,
   ring: 6,
-  revel: 12,
+  revel: 8,
+};
+*/
+const collapseTimes = {
+  recolor: 0.5,
+  shrink: 1,
+  pause: 1.5,
+  expand: 1.55,
+  ring: 2,
+  revel: 2.5,
 };
 const collapseLengths = {
   recolor: collapseTimes.recolor,
@@ -92,19 +147,26 @@ const collapseLengths = {
   revel: collapseTimes.revel - collapseTimes.ring,
 };
 
-// implement level cap
-// implement stellar upgrade
-// TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
-// TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
-// only setState once pper gameLoop
+// only setState once per gameLoop and take state as argument
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
+// stellar nursery
+// more interstellar upgrades. starting bonuses? gravity? drag? speed up collapse animation?
+// prevent creating protostars when too many stars
+// darker background. lighter particles. light up particles from sun?
+// option to disable sun light?
+// center star for galaxy?
+// automate collapsing etc?
+// make photon upgrade scaling scale instead of abrupt
 
 // Lower priority
 // TODO: Animate log/other things
-// TODO: Design next layer: star clusters/nebulas/constellations
 // setting to limit rendered particles
 // dark starfield as background, with stars equal to number of stars created?
 // better itoa including truncing or rounding up
+// switch to hsl
+// TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
+// TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
+// refactor photon upgrades
 
 const logTexts = {
   opening: "The universe is dark.",
@@ -134,6 +196,8 @@ class App extends React.Component {
       this.state = this.getInitState();
     }
     this.fields = [];
+    this.interstellarMass = 0; // cache from completedStars/etc in state
+    this.interstellarPhotonIncome = 0; // same as above
     for (let star of this.state.stars) {
       this.fields.push(this.getInitField(star));
     }
@@ -145,11 +209,13 @@ class App extends React.Component {
 
   reset = () => {
     let state = this.getInitState();
-    this.setState(state);
+    this.setState(state, this.resizeCanvas);
     this.fields = [];
     for (let star of state.stars) {
       this.fields.push(this.getInitField(star));
     }
+    this.interstellarMass = 0;
+    this.interstellarPhotonIncome = 0;
   };
 
   resetLocalVars = () => {
@@ -163,32 +229,35 @@ class App extends React.Component {
       paused: false,
       stars: [this.getInitStar()],
       logText: [logTexts.opening],
+      headerTab: "protostar",
+      interstellarTab: "info",
       tab: "upgrades",
       particleLimit: 1000,
+      interstellar: {
+        completedStars: [],
+        completedConstellations: [],
+        completedGalaxies: [],
+        photons: 0,
+        upgrades: {
+          bonusParticlePhotons: 0,
+          permanentMilestones: 0,
+        },
+        milestonesUnlocked: 0,
+      },
       featureTriggers: {
         firstPhoton: false,
         unlockUpgrades: false,
         firstUpgrade: false,
         unlockMass: false,
         unlockCollapse: false,
-      },
-      upgrades: {
-        startingGravity: 0,
-        mouseGravity: 0,
-        permanentMouseGravity: 0,
-        startingMass: 0,
-        startingPhotons: 0,
-        startingParticleCount: 0,
-        startingRadiusFactor: 0,
-        startingParticleRadius: 0,
-        startingParticleMass: 0,
-        startingParticlePhotons: 0,
+        firstCollapse: false,
       },
     };
     return state;
   };
 
   getInitStar = () => {
+    let interstellar = this.state.interstellar;
     let star = {
       photons: 0,
       starMass: 10,
@@ -196,7 +265,7 @@ class App extends React.Component {
       particleMass: 1,
       particleRadius: 3,
       particleCount: 50,
-      particlePhotons: 1,
+      particlePhotons: 1 * photonUpgradeDef.particlePhotons.effect ** interstellar.upgrades.bonusParticlePhotons,
       vx: 50,
       vy: 0,
       gridX: 0,
@@ -213,7 +282,7 @@ class App extends React.Component {
         permanentMouseGravity: 0,
         gravity: 0,
       },
-      milestonesUnlocked: 0,
+      milestonesUnlocked: interstellar.upgrades.permanentMilestones,
       collapsing: false,
       collapseFrame: 0,
     };
@@ -259,19 +328,47 @@ class App extends React.Component {
   };
 
   calcUpgradeCosts = (star) => {
-    // TODO harsher scaling past 1e10 or something
     let costs = {};
     for (const [upgrade, props] of Object.entries(photonUpgradeDef)) {
-      if (star.upgrades[upgrade] >= props.levelCap) {
-        costs[upgrade] =
+      let cost;
+      if (star.upgrades[upgrade] >= props.scalingLevel) {
+        cost =
           props.initialCost *
-          props.costMultiplier ** props.levelCap *
+          props.costMultiplier ** props.scalingLevel *
           props.scalingCostMultiplier **
-            (star.upgrades[upgrade] - props.levelCap);
+            (star.upgrades[upgrade] - props.scalingLevel);
       } else {
-        costs[upgrade] =
+        cost =
           props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
       }
+      costs[upgrade] = {
+        cost: cost,
+        capped:
+          star.upgrades[upgrade] >= props.levelCap &&
+          this.interstellar.milestonesUnlocked < 1,
+      };
+    }
+    return costs;
+  };
+
+  calcInterstellarUpgradeCosts = () => {
+    let costs = {};
+    let upgrades = this.state.interstellar.upgrades;
+    for (const props of interstellarUpgradeDef) {
+      let cost;
+      if (upgrades[props.id] >= props.scalingLevel) {
+        cost =
+          props.initialCost *
+          props.costMultiplier ** props.scalingLevel *
+          props.scalingCostMultiplier **
+            (upgrades[props.id] - props.scalingLevel);
+      } else {
+        cost = props.initialCost * props.costMultiplier ** upgrades[props.id];
+      }
+      costs[props.id] = {
+        cost: cost,
+        capped: upgrades[props.id] >= props.levelCap,
+      };
     }
     return costs;
   };
@@ -283,262 +380,520 @@ class App extends React.Component {
     let field = this.fields[starIndex];
     let ft = s.featureTriggers;
     const canvas = this.canvas.current;
-    if (canvas !== null) {
+    if (canvas !== null && s.headerTab === "protostar") {
       this.drawCanvas(canvas, star, field);
     }
-    let starProgress =
-      (100 * Math.log(star.starMass - 9)) / Math.log(collapseMass);
-    if (starProgress > 100) {
-      starProgress = 100;
+    let starProgress, upgradeCosts, interstellarUpgradeCosts;
+    if (s.headerTab === "protostar") {
+      starProgress =
+        (100 * Math.log(star.starMass - 9)) / Math.log(collapseMass);
+      if (starProgress > 100) {
+        starProgress = 100;
+      }
+      upgradeCosts = this.calcUpgradeCosts(star);
+    } else {
+      if (s.headerTab === "protostar") {
+        console.log("Accidentally on protostar tab");
+        s.headerTab = "interstellar";
+      }
+      interstellarUpgradeCosts = this.calcInterstellarUpgradeCosts();
+      //console.log('costs',interstellarUpgradeCosts);
     }
-    let upgradeCosts = this.calcUpgradeCosts(star);
 
     return (
       <div id="verticalFlex">
         <div className="header">
-          {ft.firstPhoton && (
-            <span className="headerElement">
-              <span className="headerValue">{itoa(star.photons, true)}</span>{" "}
-              photons
-            </span>
-          )}
-          {ft.unlockMass && (
-            <span className="headerElement headerValue">
-              {itoa(star.starMass, true, 1, "g")}
-            </span>
-          )}
-          <div className="button" onClick={this.togglePause}>
-            {s.paused ? "Resume" : "Pause"}
+          <div className="headerTabs">
+            {ft.firstCollapse && (
+              <>
+                <div
+                  className={
+                    "button " +
+                    (s.stars.length === 0 ? "disabled " : "") +
+                    (s.headerTab === "protostar" ? "selected " : "")
+                  }
+                  onClick={() => {
+                    if (s.stars.length === 0) {
+                      return;
+                    }
+                    this.setState(
+                      { headerTab: "protostar" },
+                      this.resizeCanvas
+                    );
+                  }}
+                >
+                  Protostar
+                </div>
+                <div
+                  className={
+                    "button " +
+                    (s.headerTab === "interstellar" ? "selected " : "")
+                  }
+                  onClick={() => this.setState({ headerTab: "interstellar" })}
+                >
+                  Interstellar
+                </div>
+              </>
+            )}
           </div>
 
-          <div
-            className="button"
-            onClick={() => this.modifyStar(starIndex, "photons", 100)}
-          >
-            Photons
-          </div>
-          <div
-            className="button"
-            onClick={() => this.modifyStar(starIndex, "starMass", 100)}
-          >
-            Mass
-          </div>
-          <div
-            className="button"
-            onClick={() => this.modifyStar(starIndex, "starRadiusFactor", 1.1)}
-          >
-            Radius
-          </div>
-          <div className="button" onClick={this.reset}>
-            Reset
+          <div className="headerButtons">
+            <div className="button" onClick={this.togglePause}>
+              {s.paused ? "Resume" : "Pause"}
+            </div>
+
+            <div
+              className="button"
+              onClick={() => this.modifyStar(starIndex, "photons", 100)}
+            >
+              Photons
+            </div>
+            <div
+              className="button"
+              onClick={() => this.modifyStar(starIndex, "starMass", 100)}
+            >
+              Mass
+            </div>
+            <div
+              className="button"
+              onClick={() => this.preCollapseStar(starIndex)}
+            >
+              Pre-Collapse
+            </div>
+            <div className="button" onClick={this.reset}>
+              Reset
+            </div>
           </div>
         </div>
 
         <div id="flex">
           <div className="panel" id="leftPanel">
-            {/*<p>Velocity: {star.velocity.toFixed(2)}</p>*/}
-            {ft.unlockUpgrades && (
-              <div>
-                <div className="tabs">
-                  <div
-                    className={
-                      "tab " + (s.tab === "upgrades" ? "selected" : "")
-                    }
-                    onClick={() => this.setState({ tab: "upgrades" })}
-                  >
-                    Upgrades
-                  </div>
-                  {ft.unlockMass && (
-                    <div
-                      className={
-                        "tab " + (s.tab === "milestones" ? "selected" : "")
-                      }
-                      onClick={() => this.setState({ tab: "milestones" })}
-                    >
-                      Mass Milestones
-                    </div>
+            {s.headerTab === "protostar" && (
+              <>
+                <div className="panelHeader">
+                  {ft.firstPhoton && (
+                    <span className="headerElement">
+                      <span className="headerValue">
+                        {itoa(star.photons, true)}
+                      </span>{" "}
+                      photons
+                    </span>
                   )}
-                  {ft.unlockCollapse && (
-                    <div
-                      className={
-                        "tab " + (s.tab === "collapse" ? "selected" : "")
-                      }
-                      onClick={() => this.setState({ tab: "collapse" })}
-                    >
-                      Collapse
-                    </div>
+                  {ft.unlockMass && (
+                    <span className="headerElement headerValue">
+                      {itoa(star.starMass, true, 1, "g")}
+                    </span>
                   )}
                 </div>
-                <div className="tabPane">
-                  {s.tab === "upgrades" && (
-                    <div id="upgrades">
+                {ft.unlockUpgrades && (
+                  <div>
+                    <div className="tabs">
                       <div
                         className={
-                          "upgrade button" +
-                          (star.photons < upgradeCosts.particlePhotons
-                            ? " disabled"
-                            : "")
+                          "tab " + (s.tab === "upgrades" ? "selected" : "")
                         }
-                        onClick={() =>
-                          this.buyUpgrade(
-                            starIndex,
-                            "particlePhotons",
-                            upgradeCosts.particlePhotons
-                          )
-                        }
+                        onClick={() => this.setState({ tab: "upgrades" })}
                       >
-                        <p>
-                          <span className="upgradeName">Particle Photons</span>
-                          {" " + itoa(upgradeCosts.particlePhotons, true)}{" "}
-                          photons
-                        </p>
-                        <p className="upgradeDesc">
-                          Increase the number of photons generated by particle
-                          collisions by{" "}
-                          {Math.round(
-                            (photonUpgradeDef.particlePhotons.effect - 1) * 100
-                          )}
-                          %
-                        </p>
+                        Upgrades
                       </div>
-                      {ft.firstUpgrade && (
-                        <div
-                          className={
-                            "upgrade button" +
-                            (star.photons < upgradeCosts.particleCount
-                              ? " disabled"
-                              : "")
-                          }
-                          onClick={() =>
-                            this.buyUpgrade(
-                              starIndex,
-                              "particleCount",
-                              upgradeCosts.particleCount
-                            )
-                          }
-                        >
-                          <p>
-                            <span className="upgradeName">Particle Count</span>
-                            {" " + itoa(upgradeCosts.particleCount, true)}{" "}
-                            photons
-                          </p>
-                          <p className="upgradeDesc">
-                            Increase the number of particles in the field by{" "}
-                            {Math.round(
-                              (photonUpgradeDef.particleCount.effect - 1) * 100
-                            )}
-                            %
-                          </p>
-                        </div>
-                      )}
                       {ft.unlockMass && (
                         <div
                           className={
-                            "upgrade button" +
-                            (star.photons < upgradeCosts.particleMass
-                              ? " disabled"
-                              : "")
+                            "tab " + (s.tab === "milestones" ? "selected" : "")
                           }
-                          onClick={() =>
-                            this.buyUpgrade(
-                              starIndex,
-                              "particleMass",
-                              upgradeCosts.particleMass
-                            )
-                          }
+                          onClick={() => this.setState({ tab: "milestones" })}
                         >
-                          <p>
-                            <span className="upgradeName">Particle Mass</span>
-                            {" " + itoa(upgradeCosts.particleMass, true)}{" "}
-                            photons
-                          </p>
-                          <p className="upgradeDesc">
-                            Increase the mass of particles in the field by{" "}
-                            {Math.round(
-                              (photonUpgradeDef.particleMass.effect - 1) * 100
-                            )}
-                            %
-                          </p>
+                          Mass Milestones
+                        </div>
+                      )}
+                      {ft.unlockCollapse && (
+                        <div
+                          className={
+                            "tab " + (s.tab === "collapse" ? "selected" : "")
+                          }
+                          onClick={() => this.setState({ tab: "collapse" })}
+                        >
+                          Collapse
                         </div>
                       )}
                     </div>
-                  )}
-                  {s.tab === "milestones" && (
-                    <div id="milestones">
-                      {[
-                        ...Array(
-                          Math.min(
-                            star.milestonesUnlocked + 1,
-                            massMilestones.length
-                          )
-                        ).keys(),
-                      ].map((_, msIndex) => {
-                        return (
+                    <div className="tabPane">
+                      {s.tab === "upgrades" && (
+                        <div id="upgrades">
                           <div
                             className={
-                              "milestone" +
-                              (msIndex >= star.milestonesUnlocked
+                              "upgrade button" +
+                              (upgradeCosts.particlePhotons.capped ||
+                              star.photons < upgradeCosts.particlePhotons.cost
                                 ? " disabled"
                                 : "")
+                            }
+                            onClick={() =>
+                              this.buyUpgrade(
+                                starIndex,
+                                "particlePhotons",
+                                upgradeCosts.particlePhotons
+                              )
                             }
                           >
                             <p>
                               <span className="upgradeName">
-                                {massMilestones[msIndex].name}
-                              </span>
-                              {" " +
-                                itoa(
-                                  massMilestones[msIndex].value,
-                                  true,
-                                  1,
-                                  "g"
-                                )}
+                                Particle Photons
+                              </span>{" "}
+                              {upgradeCosts.particlePhotons.capped
+                                ? "Max Level"
+                                : itoa(
+                                    upgradeCosts.particlePhotons.cost,
+                                    true
+                                  ) + " photons"}
                             </p>
                             <p className="upgradeDesc">
-                              {massMilestones[msIndex].firstDescription &&
-                              !s.collapseCount
-                                ? massMilestones[msIndex].firstDescription
-                                : massMilestones[msIndex].description}
+                              Increase the number of photons generated by
+                              particle collisions by{" "}
+                              {Math.round(
+                                (photonUpgradeDef.particlePhotons.effect - 1) *
+                                  100
+                              )}
+                              %
                             </p>
                           </div>
-                        );
-                      })}
+                          {ft.firstUpgrade && (
+                            <div
+                              className={
+                                "upgrade button" +
+                                (upgradeCosts.particleCount.capped ||
+                                star.photons < upgradeCosts.particleCount.cost
+                                  ? " disabled"
+                                  : "")
+                              }
+                              onClick={() =>
+                                this.buyUpgrade(
+                                  starIndex,
+                                  "particleCount",
+                                  upgradeCosts.particleCount
+                                )
+                              }
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  Particle Count
+                                </span>{" "}
+                                {upgradeCosts.particleCount.capped
+                                  ? "Max Level"
+                                  : itoa(
+                                      upgradeCosts.particleCount.cost,
+                                      true
+                                    ) + " photons"}
+                              </p>
+                              <p className="upgradeDesc">
+                                Increase the number of particles in the field by{" "}
+                                {Math.round(
+                                  (photonUpgradeDef.particleCount.effect - 1) *
+                                    100
+                                )}
+                                %
+                              </p>
+                            </div>
+                          )}
+                          {ft.unlockMass && (
+                            <div
+                              className={
+                                "upgrade button" +
+                                (upgradeCosts.particleMass.capped ||
+                                star.photons < upgradeCosts.particleMass.cost
+                                  ? " disabled"
+                                  : "")
+                              }
+                              onClick={() =>
+                                this.buyUpgrade(
+                                  starIndex,
+                                  "particleMass",
+                                  upgradeCosts.particleMass
+                                )
+                              }
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  Particle Mass
+                                </span>{" "}
+                                {upgradeCosts.particleMass.capped
+                                  ? "Max Level"
+                                  : itoa(upgradeCosts.particleMass.cost, true) +
+                                    " photons"}
+                              </p>
+                              <p className="upgradeDesc">
+                                Increase the mass of particles in the field by{" "}
+                                {Math.round(
+                                  (photonUpgradeDef.particleMass.effect - 1) *
+                                    100
+                                )}
+                                %
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {s.tab === "milestones" && (
+                        <div id="milestones">
+                          {[
+                            ...Array(
+                              Math.min(
+                                star.milestonesUnlocked + 1,
+                                massMilestones.length
+                              )
+                            ).keys(),
+                          ].map((_, msIndex) => {
+                            return (
+                              <div
+                                className={
+                                  "milestone" +
+                                  (msIndex >= star.milestonesUnlocked
+                                    ? " disabled"
+                                    : "")
+                                }
+                              >
+                                <p>
+                                  <span className="upgradeName">
+                                    {massMilestones[msIndex].name}
+                                  </span>
+                                  {" " +
+                                    itoa(
+                                      massMilestones[msIndex].value,
+                                      true,
+                                      1,
+                                      "g"
+                                    )}
+                                </p>
+                                <p className="upgradeDesc">
+                                  {massMilestones[msIndex].firstDescription &&
+                                  !ft.firstCollapse
+                                    ? massMilestones[msIndex].firstDescription
+                                    : massMilestones[msIndex].description}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {s.tab === "collapse" && (
+                        <div id="collapse">
+                          <div
+                            className={
+                              "collapse button" +
+                              (star.milestonesUnlocked < 5 ? " disabled" : "")
+                            }
+                            onClick={() => this.collapse(starIndex)}
+                          >
+                            <p>
+                              <span className="upgradeName">
+                                Collapse into a star
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {s.tab === "collapse" && (
-                    <div id="collapse">
-                      <div
-                        className={
-                          "collapse button" +
-                          (star.milestonesUnlocked < 5 ? " disabled" : "")
-                        }
-                        onClick={() => this.collapse(starIndex)}
-                      >
-                        <p>
-                          <span className="upgradeName">Collapse into a star</span>
-                        </p>
-                        
-                      </div>
-                    </div>
+                  </div>
+                )}
+                {!ft.firstCollapse && (
+                  <div id="log">
+                    {s.logText.map((value, index) => (
+                      <p key={s.logText.length - index}>{value}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {s.headerTab === "interstellar" && (
+              <>
+                <div className="panelHeader">
+                  <span className="headerElement">
+                    <span className="headerValue">
+                      {itoa(s.interstellar.photons, true)}
+                    </span>{" "}
+                    interstellar photons
+                  </span>
+                  {ft.unlockMass && (
+                    <span className="headerElement headerValue">
+                      {itoa(this.interstellarMass, true, 1, "g")}
+                    </span>
                   )}
                 </div>
-              </div>
+
+                <div>
+                  <div className="tabs">
+                    <div
+                      className={
+                        "tab " +
+                        (s.interstellarTab === "info" ? "selected" : "")
+                      }
+                      onClick={() => this.setState({ interstellarTab: "info" })}
+                    >
+                      Info
+                    </div>
+                    <div
+                      className={
+                        "tab " +
+                        (s.interstellarTab === "upgrades" ? "selected" : "")
+                      }
+                      onClick={() =>
+                        this.setState({ interstellarTab: "upgrades" })
+                      }
+                    >
+                      Upgrades
+                    </div>
+                    <div
+                      className={
+                        "tab " +
+                        (s.interstellarTab === "milestones" ? "selected" : "")
+                      }
+                      onClick={() =>
+                        this.setState({ interstellarTab: "milestones" })
+                      }
+                    >
+                      Mass Milestones
+                    </div>
+                    <div
+                      className={
+                        "tab " +
+                        (s.interstellarTab === "create" ? "selected" : "")
+                      }
+                      onClick={() =>
+                        this.setState({ interstellarTab: "create" })
+                      }
+                    >
+                      Create Protostar
+                    </div>
+                  </div>
+                  <div className="tabPane">
+                    {s.interstellarTab === "info" && (
+                      <>
+                        <p>
+                          You've become a star, and yet you realize, you are
+                          more than just this star. You are this universe, and
+                          you want to fill it with light. By creating new
+                          protostars, you can turn each of those into their own
+                          stars.
+                        </p>
+                        <p>
+                          Each star you create generates interstellar photons
+                          based on its mass. These interstellar photons can be
+                          used to buy poweful upgrades and also provide a small
+                          income to new protostars. With 1e20 interstellar
+                          photons, you think you
+                        </p>
+                      </>
+                    )}
+                    {s.interstellarTab === "upgrades" && (
+                      <div id="upgrades">
+                        {interstellarUpgradeDef.map((upgradeDef) => {
+                          return (
+                            <div
+                              className={
+                                "upgrade button" +
+                                (interstellarUpgradeCosts[upgradeDef.id]
+                                  .capped ||
+                                s.interstellar.photons <
+                                  interstellarUpgradeCosts[upgradeDef.id].cost
+                                  ? " disabled"
+                                  : "")
+                              }
+                              key={upgradeDef.id}
+                              onClick={() =>
+                                this.buyInterstellarUpgrade(
+                                  upgradeDef.id,
+                                  interstellarUpgradeCosts[upgradeDef.id]
+                                )
+                              }
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  {upgradeDef.name}
+                                </span>{" "}
+                                {interstellarUpgradeCosts[upgradeDef.id].capped
+                                  ? "Max Level"
+                                  : itoa(
+                                      interstellarUpgradeCosts[upgradeDef.id]
+                                        .cost,
+                                      true
+                                    ) + " interstellar photons"}
+                              </p>
+                              <p className="upgradeDesc">
+                                {upgradeDef.description}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {s.interstellarTab === "milestones" && (
+                      <div id="milestones">
+                        {[
+                          ...Array(
+                            Math.min(
+                              s.interstellar.milestonesUnlocked + 1,
+                              stellarMilestones.length
+                            )
+                          ).keys(),
+                        ].map((_, msIndex) => {
+                          let milestone = stellarMilestones[msIndex];
+                          return (
+                            <div
+                              className={
+                                "milestone" +
+                                (msIndex >= s.interstellar.milestonesUnlocked
+                                  ? " disabled"
+                                  : "")
+                              }
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  {milestone.name}
+                                </span>
+                                {" " + itoa(milestone.value, true, 1, "g")}
+                              </p>
+                              <p className="upgradeDesc">
+                                {milestone.description}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {s.interstellarTab === "create" && (
+                      <div id="collapse">
+                        <div
+                          className={
+                            "collapse button" +
+                            (s.stars.length > 0 ? " disabled" : "")
+                          }
+                          onClick={() => this.createProtostar()}
+                        >
+                          <p>
+                            <span className="upgradeName">
+                              Create New Protostar
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
-            <div id="log">
-              {s.logText.map((value, index) => (
-                <p key={s.logText.length - index}>{value}</p>
-              ))}
-            </div>
           </div>
           <div ref={this.mainPanel} className="panel" id="mainPanel">
-            <canvas
-              className="starfield"
-              ref={this.canvas}
-              onMouseMove={this.mouseMove}
-              onMouseDown={this.mouseMove}
-              onMouseUp={this.mouseMove}
-              onMouseLeave={this.mouseMove}
-            ></canvas>
+            {s.headerTab === "protostar" && (
+              <canvas
+                className="starfield"
+                ref={this.canvas}
+                onMouseMove={this.mouseMove}
+                onMouseDown={this.mouseMove}
+                onMouseUp={this.mouseMove}
+                onMouseLeave={this.mouseMove}
+              ></canvas>
+            )}
+            {s.headerTab === "interstellar" && "Star gallery"}
           </div>
         </div>
         {ft.unlockProgress && (
@@ -566,14 +921,14 @@ class App extends React.Component {
     this.setState((state) => {
       let stars = [...state.stars];
       let star = { ...state.stars[starIndex] };
-      if (star.collapsing) {
+      if (star.collapsing || cost.capped) {
         return {};
       }
       star.upgrades = { ...star.upgrades };
-      if (cost > star.photons) {
+      if (cost.cost > star.photons) {
         return {};
       }
-      star.photons -= cost;
+      star.photons -= cost.cost;
       star.upgrades[name] += 1;
       star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
       stars[starIndex] = star;
@@ -599,6 +954,34 @@ class App extends React.Component {
     });
   };
 
+  buyInterstellarUpgrade = (id, cost) => {
+    this.setState((state) => {
+      let interstellar = { ...state.interstellar };
+      if (cost.capped) {
+        return {};
+      }
+      interstellar.upgrades = { ...interstellar.upgrades };
+      if (cost.cost > interstellar.photons) {
+        return {};
+      }
+      interstellar.photons -= cost.cost;
+      interstellar.upgrades[id] += 1;
+      let stars = [
+        ...state.stars.map((origStar) => {
+          let star = { ...origStar };
+          if (id === "bonusParticlePhotons") {
+            star.particlePhotons *= photonUpgradeDef.particlePhotons.effect;
+          } else if (id === "permanentMilestones") {
+            star.milestonesUnlocked = Math.max(interstellar.upgrades[id], star.milestonesUnlocked);
+          }
+          return star;
+        }),
+      ];
+
+      return { interstellar: interstellar, stars: stars };
+    });
+  };
+
   collapse = (starIndex) => {
     let stars = [...this.state.stars];
     let star = { ...stars[starIndex] };
@@ -614,6 +997,17 @@ class App extends React.Component {
     let stars = [...this.state.stars];
     let star = { ...stars[starIndex] };
     star[prop] = star[prop] * increase + 1;
+    stars[starIndex] = star;
+    this.setState({
+      stars: stars,
+    });
+  };
+
+  preCollapseStar = (starIndex) => {
+    let stars = [...this.state.stars];
+    let star = { ...stars[starIndex] };
+    star.starMass = 5e24;
+    star.photons = 5e9;
     stars[starIndex] = star;
     this.setState({
       stars: stars,
@@ -834,7 +1228,7 @@ class App extends React.Component {
       ctx.moveTo(photon.x + cx, photon.y + cy);
       ctx.lineTo(
         photon.x + cx + photon.vx / 60,
-        photon.y + cy + photon.vy / 60,
+        photon.y + cy + photon.vy / 60
       );
       ctx.stroke();
     }
@@ -927,7 +1321,19 @@ class App extends React.Component {
       stars: [],
       featureTriggers: { ...s.featureTriggers },
       logText: s.logText,
+      interstellar: {
+        ...s.interstellar,
+        completedStars: [...s.interstellar.completedStars],
+        completedConstellations: [...s.interstellar.completedConstellations],
+        completedGalaxies: [...s.interstellar.completedGalaxies],
+      },
     };
+    this.interstellarMass =
+      s.interstellar.completedStars.reduce(addMass, 0) +
+      s.interstellar.completedConstellations.reduce(addMass, 0) +
+      s.interstellar.completedGalaxies.reduce(addMass, 0);
+    this.interstellarPhotonIncome = 10 * (this.interstellarMass / 5e24) ** 0.5;
+    updates.interstellar.photons += this.interstellarPhotonIncome * relDelta;
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
       star.particleRadius =
@@ -1005,7 +1411,7 @@ class App extends React.Component {
         }
       }
       if (debugFrame) {
-        console.log("gConstant", gConstant);
+        //console.log("gConstant", gConstant);
       }
       velocity = (vx * vx + vy * vy) ** 0.5;
       if (velocity > velocityCap) {
@@ -1076,10 +1482,8 @@ class App extends React.Component {
             updates.logText.unshift(logTexts.unlockUpgrades);
           }
           // Don't update mass while collapsing just in case...
-          if (!star.collapsing ) {
-
+          if (!star.collapsing) {
             newMass += star.particleMass;
-
           }
         }
         while (
@@ -1088,7 +1492,7 @@ class App extends React.Component {
           newMass >= massMilestones[milestonesUnlocked].value
         ) {
           if (
-            !s.collapseCount &&
+            !updates.featureTriggers.firstCollapse &&
             massMilestones[milestonesUnlocked].unlockText
           ) {
             updates.logText.unshift(
@@ -1109,6 +1513,7 @@ class App extends React.Component {
           field.particles.push(this.genParticle(star, false));
         }
       }
+      let collapsed = false;
       if (star.collapsing) {
         if (star.collapseFrame >= collapseTimes.expand) {
           for (let i = field.photons.length; i < s.particleLimit; i++) {
@@ -1125,26 +1530,48 @@ class App extends React.Component {
         }
         star.collapseFrame += relDelta;
         if (star.collapseFrame > collapseTimes.revel) {
-          star.collapsing = false;
-          updates.collapseCount++;
-          updates.featureTriggers.firstCollapse = true;
-          // TODO other collapse accounting like moving to completed stars and destroying field
+          collapsed = true;
+          this.finishCollapse(star, index, updates);
         }
       }
-
-      updates.stars.push({
-        ...star,
-        starMass: newMass,
-        photons: newPhotons,
-        gridX: (star.gridX - vx * relDelta) % gridSpacing,
-        gridY: (star.gridY - vy * relDelta) % gridSpacing,
-        vx: vx,
-        vy: vy,
-        velocity: velocity,
-        milestonesUnlocked: milestonesUnlocked,
-      });
+      if (!collapsed) {
+        updates.stars.push({
+          ...star,
+          starMass: newMass,
+          photons: newPhotons,
+          gridX: (star.gridX - vx * relDelta) % gridSpacing,
+          gridY: (star.gridY - vy * relDelta) % gridSpacing,
+          vx: vx,
+          vy: vy,
+          velocity: velocity,
+          milestonesUnlocked: milestonesUnlocked,
+        });
+      }
     }
     this.setState(updates);
+  };
+
+  createProtostar = () => {
+    this.setState((state) => {
+      let stars = [...state.stars];
+      let star  = this.getInitStar();
+      stars.push(star);
+      this.fields.push(this.getInitField(star));
+      return {stars: stars, headerTab: 'protostar', tab:'upgrades'};
+    }, this.resizeCanvas)
+  }
+
+  finishCollapse = (star, starIndex, updates) => {
+    updates.headerTab = "interstellar";
+    if (!updates.featureTriggers.firstCollapse) {
+      updates.featureTriggers.firstCollapse = true;
+      //updates.logText.unshift(logTexts.firstCollapse);
+    }
+    updates.interstellar.completedStars.push({
+      mass: star.starMass,
+      name: "Star 1", // todo use real index
+    });
+    this.fields.splice(starIndex, 1);
   };
 }
 
@@ -1180,5 +1607,6 @@ function itoa(num, noFrac, noFracFixed, unitSuffix = "") {
   return (num / base).toFixed(3) + suffix + unitSuffix;
 }
 window.itoa = itoa;
+const addMass = (acc, val) => acc + val.mass;
 
 export default App;

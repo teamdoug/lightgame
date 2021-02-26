@@ -17,6 +17,29 @@ body {
   height: 25px;
   margin: 20px 0px;
   font-size: larger;
+  display: flex;
+  justify-content: space-between;
+  width: 100%
+}
+
+.header .button {
+  margin-right: 5px
+}
+
+.header .button.selected {
+  background-color: #222;
+}
+
+.headerTabs .button {
+  background-color: #333;
+}
+
+.header .button:not(.disabled):not(.selected):hover {
+  background-color: #888;
+}
+
+.headerButtons {
+  text-align: right;
 }
 
 .headerValue {
@@ -24,8 +47,15 @@ body {
   font-weight: bold
 }
 
+
 .headerElement {
   margin-right: 15px;
+  margin-bottom: 5px;
+}
+
+.panelHeader {
+  margin-bottom: 5px;
+  font-size: large;
 }
 
 #flex {
@@ -101,6 +131,7 @@ body {
 }
 
 .button.disabled {
+  color: #bbb;
   background-color: #666
 }
 
@@ -150,7 +181,7 @@ body {
 }
 
 .tab {
-  padding: 0px 2px 3px 2px;
+  padding: 0px 3px 3px 3px;
   border: 1px #ddd solid;
   display: inline-block;
   border-bottom: none;
