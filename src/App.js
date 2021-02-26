@@ -27,7 +27,7 @@ const photonUpgradeDef = {
     effect: 1.5,
     levelCap: 5,
     scalingLevel: 5,
-    scalingCostExponent: 1.5,
+    scalingCostExponent: 2,
   },
   particleMass: {
     initialCost: 40,
@@ -95,7 +95,7 @@ const interstellarUpgradeDef = [
     levelCap: 4,
   },
 ];
-const stellarMilestones = [
+const stellarMassMilestones = [
   {
     value: collapseMass,
     name: "Continued Growth",
@@ -103,21 +103,44 @@ const stellarMilestones = [
       "Protostar photon upgrades no longer have a level cap, but they scale much worse shortly after the previous cap",
   },
   {
-    value: 5 * collapseMass,
+    value: 1e4 * collapseMass,
+    name: "Second Protostar",
+    description: "You can now develop two protostars simultaneously",
+  },
+  {
+    value: 1e7 * collapseMass,
+    name: "Unlock Bonus Particle Mass",
+    description:
+      "Unlock an interstellar upgrade to give bonus levels to particle mass",
+  },
+];
+const stellarMilestones = [
+  {
+    value: 1,
+    name: "Buy Max",
+    description: "Buying photon upgrades now buys as many as possible",
+  },
+  {
+    value: 2,
+    name: "Auto Protostar Creation",
+    description:
+      "New protostars are automatically created when you collapse one",
+  },
+  {
+    value: 3,
     name: "Autobuyers",
     description: "You can enable autobuyers for protostar photon upgrades",
   },
   {
-    value: 10 * collapseMass,
-    name: "Constellations",
-    description:
-      "You can merge stars into constellations, providing significant interstellar photon gains",
+    value: 5,
+    name: "Faster Collapse",
+    description: "Speed up the star collapse animation",
   },
   {
-    value: 100 * collapseMass,
-    name: "Galaxies",
+    value: 10,
+    name: "Constellations",
     description:
-      "You can merge constellations into galaxies, providing even more insterstellar photon gains",
+      "You can merge stars into constellations, providing more space for protostars and significant interstellar photon gains",
   },
 ];
 /*
@@ -136,7 +159,7 @@ const collapseTimes = {
   pause: 1.5,
   expand: 1.55,
   ring: 2,
-  revel: 2.5,
+  revel: 2,
 };
 const collapseLengths = {
   recolor: collapseTimes.recolor,
@@ -160,6 +183,7 @@ const collapseLengths = {
 // big particles?
 // autocreate new protostars
 // moving ai?
+// prevent unlocking second protostar unless stellar milestone 2 reached
 
 // Lower priority
 // TODO: Animate log/other things
@@ -246,6 +270,8 @@ class App extends React.Component {
           permanentMilestones: 0,
         },
         milestonesUnlocked: 0,
+        stellarMilestonesUnlocked: 0,
+        collapseCount: 0,
       },
       featureTriggers: {
         firstPhoton: false,
@@ -342,7 +368,8 @@ class App extends React.Component {
           props.initialCost *
           props.costMultiplier ** props.scalingLevel *
           props.costMultiplier **
-            ((star.upgrades[upgrade] - props.scalingLevel)**props.scalingCostExponent);
+            ((star.upgrades[upgrade] - props.scalingLevel) **
+              props.scalingCostExponent);
       } else {
         cost =
           props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
@@ -389,13 +416,8 @@ class App extends React.Component {
     if (canvas !== null && s.headerTab === "protostar") {
       this.drawCanvas(canvas, star, field);
     }
-    let starProgress, upgradeCosts, interstellarUpgradeCosts;
+    let upgradeCosts, interstellarUpgradeCosts;
     if (s.headerTab === "protostar") {
-      starProgress =
-        (100 * Math.log(star.starMass - 9)) / Math.log(collapseMass);
-      if (starProgress > 100) {
-        starProgress = 100;
-      }
       upgradeCosts = this.calcUpgradeCosts(star);
     } else {
       if (s.headerTab === "protostar") {
@@ -405,6 +427,11 @@ class App extends React.Component {
       interstellarUpgradeCosts = this.calcInterstellarUpgradeCosts();
       //console.log('costs',interstellarUpgradeCosts);
     }
+    let winProgress =
+    (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
+  if (winProgress > 100) {
+    winProgress = 100;
+  }
 
     return (
       <div id="verticalFlex">
@@ -482,7 +509,7 @@ class App extends React.Component {
                       <span className="headerValue">
                         {itoa(star.photons, true)}
                       </span>{" "}
-                      photons
+                      photon{star.photons > 1 ? 's':''}
                     </span>
                   )}
                   {ft.unlockMass && (
@@ -717,7 +744,8 @@ class App extends React.Component {
                     <span className="headerValue">
                       {itoa(s.interstellar.photons, true)}
                     </span>{" "}
-                    interstellar photons
+                    interstellar photon{s.interstellar.photons > 1 ? 's':''} (+
+                    {itoa(this.interstellarPhotonIncome, true)}/s)
                   </span>
                   {ft.unlockMass && (
                     <span className="headerElement headerValue">
@@ -762,13 +790,13 @@ class App extends React.Component {
                     <div
                       className={
                         "tab " +
-                        (s.interstellarTab === "create" ? "selected" : "")
+                        (s.interstellarTab === "stellarMilestones" ? "selected" : "")
                       }
                       onClick={() =>
-                        this.setState({ interstellarTab: "create" })
+                        this.setState({ interstellarTab: "stellarMilestones" })
                       }
                     >
-                      Create Protostar
+                      Stellar Milestones
                     </div>
                   </div>
                   <div className="tabPane">
@@ -785,9 +813,28 @@ class App extends React.Component {
                           Each star you create generates interstellar photons
                           based on its mass. These interstellar photons can be
                           used to buy poweful upgrades and also provide a small
-                          income to new protostars. With 1e20 interstellar
-                          photons, you think you
+                          income to new protostars. If you were generating 1e20
+                          interstellar photons per second, that would be enough
+                          to light up the universe.
                         </p>
+                        <p>
+                          This is the last commentary you're getting, but turn
+                          on "I Love Math" mode in the settings if you want
+                          better details. Good luck!
+                        </p>
+                        <div
+                          className={
+                            "collapse button" +
+                            (s.stars.length > 0 ? " disabled" : "")
+                          }
+                          onClick={() => this.createProtostar()}
+                        >
+                          <p>
+                            <span className="upgradeName">
+                              Create New Protostar
+                            </span>
+                          </p>
+                        </div>
                       </>
                     )}
                     {s.interstellarTab === "upgrades" && (
@@ -838,11 +885,11 @@ class App extends React.Component {
                           ...Array(
                             Math.min(
                               s.interstellar.milestonesUnlocked + 1,
-                              stellarMilestones.length
+                              stellarMassMilestones.length
                             )
                           ).keys(),
                         ].map((_, msIndex) => {
-                          let milestone = stellarMilestones[msIndex];
+                          let milestone = stellarMassMilestones[msIndex];
                           return (
                             <div
                               className={
@@ -866,21 +913,38 @@ class App extends React.Component {
                         })}
                       </div>
                     )}
-                    {s.interstellarTab === "create" && (
-                      <div id="collapse">
-                        <div
-                          className={
-                            "collapse button" +
-                            (s.stars.length > 0 ? " disabled" : "")
-                          }
-                          onClick={() => this.createProtostar()}
-                        >
-                          <p>
-                            <span className="upgradeName">
-                              Create New Protostar
-                            </span>
-                          </p>
-                        </div>
+                    {s.interstellarTab === "stellarMilestones" && (
+                      <div id="milestones">
+                        {[
+                          ...Array(
+                            Math.min(
+                              s.interstellar.stellarMilestonesUnlocked + 1,
+                              stellarMilestones.length
+                            )
+                          ).keys(),
+                        ].map((_, msIndex) => {
+                          let milestone = stellarMilestones[msIndex];
+                          return (
+                            <div
+                              className={
+                                "milestone" +
+                                (msIndex >= s.interstellar.stellarMilestonesUnlocked
+                                  ? " disabled"
+                                  : "")
+                              }
+                            >
+                              <p>
+                                <span className="upgradeName">
+                                  {milestone.name}
+                                </span>
+                                {" " + itoa(milestone.value, true) + " star" + (milestone.value > 1 ? 's':'')}
+                              </p>
+                              <p className="upgradeDesc">
+                                {milestone.description}
+                              </p>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -902,11 +966,11 @@ class App extends React.Component {
             {s.headerTab === "interstellar" && "Star gallery"}
           </div>
         </div>
-        {ft.unlockProgress && (
+        {ft.firstCollapse && (
           <div className="progress">
             <div
               style={{
-                width: starProgress + "%",
+                width: winProgress + "%",
                 postition: "absolute",
                 top: 0,
                 left: 0,
@@ -915,7 +979,7 @@ class App extends React.Component {
               }}
             ></div>
             <div style={{ position: "absolute", top: 0, left: 0 }}>
-              {starProgress.toFixed(2)}% to Stellar Mass ({itoa(collapseMass)}g)
+              {winProgress.toFixed(2)}% to Lighting up the Universe (1e20 interstellar photons/s)
             </div>
           </div>
         )}
@@ -1327,7 +1391,7 @@ class App extends React.Component {
     let s = this.state;
     let relDelta = delta / 1000;
     let updates = {
-      stars: [],
+      stars: [...s.stars],
       featureTriggers: { ...s.featureTriggers },
       logText: s.logText,
       interstellar: {
@@ -1342,14 +1406,14 @@ class App extends React.Component {
       s.interstellar.completedConstellations.reduce(addMass, 0) +
       s.interstellar.completedGalaxies.reduce(addMass, 0);
     while (
-      updates.interstellar.milestonesUnlocked < stellarMilestones.length &&
+      updates.interstellar.milestonesUnlocked < stellarMassMilestones.length &&
       this.interstellarMass >=
-        stellarMilestones[updates.interstellar.milestonesUnlocked].value
+        stellarMassMilestones[updates.interstellar.milestonesUnlocked].value
     ) {
       updates.interstellar.milestonesUnlocked++;
     }
 
-    this.interstellarPhotonIncome = 10 * (this.interstellarMass / 5e24) ** 0.5;
+    this.interstellarPhotonIncome = 10 * (this.interstellarMass / 5e24);
     updates.interstellar.photons += this.interstellarPhotonIncome * relDelta;
     const dragConstant = 0.0005;
     for (let [index, star] of this.state.stars.entries()) {
@@ -1365,7 +1429,7 @@ class App extends React.Component {
       field.colorFrame = (field.colorFrame + relDelta) % 10;
       let gConstant = (gravity * Math.log(star.starMass)) / Math.log(20);
       let newMass = star.starMass;
-      let newPhotons = star.photons + this.interstellarPhotonIncome**.5;
+      let newPhotons = star.photons + this.interstellarPhotonIncome ** 0.5;
       let vx = star.vx;
       let vy = star.vy;
       let velocity = star.velocity;
@@ -1548,11 +1612,11 @@ class App extends React.Component {
         star.collapseFrame += relDelta;
         if (star.collapseFrame > collapseTimes.revel) {
           collapsed = true;
-          this.finishCollapse(star, index, updates);
+          this.finishCollapse(updates.stars, index, updates);
         }
       }
       if (!collapsed) {
-        updates.stars.push({
+        updates.stars[index] = {
           ...star,
           starMass: newMass,
           photons: newPhotons,
@@ -1562,7 +1626,7 @@ class App extends React.Component {
           vy: vy,
           velocity: velocity,
           milestonesUnlocked: milestonesUnlocked,
-        });
+        };
       }
     }
     this.setState(updates);
@@ -1578,8 +1642,8 @@ class App extends React.Component {
     }, this.resizeCanvas);
   };
 
-  finishCollapse = (star, starIndex, updates) => {
-    updates.headerTab = "interstellar";
+  finishCollapse = (stars, starIndex, updates) => {
+    let star = stars[starIndex];
     if (!updates.featureTriggers.firstCollapse) {
       updates.featureTriggers.firstCollapse = true;
       //updates.logText.unshift(logTexts.firstCollapse);
@@ -1588,7 +1652,25 @@ class App extends React.Component {
       mass: star.starMass,
       name: "Star 1", // todo use real index
     });
-    this.fields.splice(starIndex, 1);
+    updates.interstellar.collapseCount++;
+    while (
+      updates.interstellar.stellarMilestonesUnlocked < stellarMilestones.length &&
+      updates.interstellar.collapseCount >=
+        stellarMilestones[updates.interstellar.stellarMilestonesUnlocked].value
+    ) {
+      updates.interstellar.stellarMilestonesUnlocked++;
+    }
+    if (updates.interstellar.stellarMilestonesUnlocked < 2) {
+      updates.headerTab = "interstellar";
+      star.collapsed = true;
+      this.fields.splice(starIndex, 1); // fix this
+      stars.splice(starIndex, 1)
+    } else {
+      updates.tab = 'upgrades'
+      stars[starIndex] = this.getInitStar();
+      this.fields[starIndex] = this.getInitField(stars[starIndex]);
+    }
+
   };
 }
 
