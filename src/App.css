@@ -1,6 +1,6 @@
 html,
 body {
-  background-color: #333;
+  background-color: #111;
   color: #ddd;
   overflow: hidden;
 }
@@ -35,7 +35,7 @@ body {
 }
 
 .header .button:not(.disabled):not(.selected):hover {
-  background-color: #888;
+  background-color: #666;
 }
 
 .headerButtons {
@@ -65,7 +65,7 @@ body {
 }
 
 .panel {
-  background-color: #484848;
+  background-color: #222;
   /*min-height: 100%;*/
 }
 
@@ -126,12 +126,12 @@ body {
 }
 
 .button:hover:not(.disabled) {
-  background-color: #888;
+  background-color: #666;
 }
 
 .button.disabled {
   color: #bbb;
-  background-color: #666;
+  background-color: #444;
 }
 
 #upgrades .wrapper {
@@ -161,6 +161,9 @@ body {
 
 .upgrade.button {
   margin-bottom: 5px;
+}
+.interstellar.upgrade.button {
+  display:block
 }
 
 #collapse {
@@ -205,7 +208,7 @@ body {
 }
 
 .milestone.disabled {
-  background-color: #666;
+  background-color: #444;
 }
 
 .tabs {
@@ -231,5 +234,5 @@ body {
   background-color: #222;
 }
 .tab:not(.selected):hover {
-  background-color: #888;
+  background-color: #666;
 }

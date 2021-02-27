@@ -1,5 +1,6 @@
 import "./App.css";
 import React from "react";
+import { hsluvToHex } from "hsluv";
 
 const maxWidth = 2000;
 const maxHeight = 1500;
@@ -10,7 +11,8 @@ const gravity = 200000;
 const mouseAcceleration = 300;
 const collapseMass = 5e24;
 const yellowCollapseMass = 1e33;
-//const blueCollapseMass = 1e30;
+const whiteCollapseMass = 1e40;
+const blueCollapseMass = 1e45;
 const starDragConstant = 1;
 const photonUpgradeDef = {
   particlePhotons: {
@@ -154,31 +156,26 @@ const stellarMilestones = [
     name: "Faster Collapse",
     description: "Speed up the star collapse animation",
   },
+
   {
-    value: 8,
-    name: "Constellations",
-    description:
-      "You can merge stars into constellations, providing more space for protostars and significant interstellar photon gains",
-  },
-  {
-    value: 15,
+    value: 12,
     name: "Auto-Collapse",
     description: "You can set protostars to auto-collapse",
   },
   {
-    value: 30,
+    value: 40,
     name: "Particles Spawn inside Field",
     description:
       "Particles now spawn inside the field instead of outside the edge",
   },
   {
-    value: 100,
+    value: 120,
     name: "Buying Particle Mass Upgrade Simulates Particle Collision",
     description:
       "Whenever you buy a Particle Mass upgrade, the protostar grows as if a particle collided",
   },
   {
-    value: 200,
+    value: 300,
     name: "Instant Auto-Collapse",
     description:
       "When a protostar auto-collapses, it no longer has any animation",
@@ -226,19 +223,14 @@ const slowCollapseLengths = fastCollapseLengths;
 
 // only setState once per gameLoop and take state as argument
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
-// stellar nursery
-// more interstellar upgrades. starting bonuses? gravity? drag? speed up collapse animation?
-// prevent creating protostars when too many stars or replace existing? via supernova?
 // darker background. lighter particles. light up particles from sun?
 // option to disable sun light?
-// automate collapsing etc?
 // math descriptions
-// big particles?
-// moving ai?
-// stellar milestones 3/5/10
 // constellations give a multiplicative bonus (e.g. * # stars or even ** (sqrt(# stars))
-// stats page (or show # of stars on stellar milestones)
+// stats page (or show # of stars on stellar milestones) - instead of create protostar button
 // hotkeys
+// draw stars in background biased towards viewport
+// multiplicative bonus that is explained somewhat
 
 // Lower priority
 // TODO: Animate log/other things
@@ -516,7 +508,13 @@ class App extends React.Component {
       s.headerTab === "protostar" || s.headerTab === "protostar2";
     const canvas = this.canvas.current;
     if (canvas !== null && showProtostar) {
-        this.drawCanvas(canvas, star, field, s.interstellar, s.autocollapse[starIndex]);
+      this.drawCanvas(
+        canvas,
+        star,
+        field,
+        s.interstellar,
+        s.autocollapse[starIndex]
+      );
     }
     let winProgress =
       (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
@@ -872,7 +870,7 @@ class App extends React.Component {
                               </div>
                             </div>
                           )}
-                          {s.interstellar.stellarMilestonesUnlocked >= 6 && (
+                          {s.interstellar.stellarMilestonesUnlocked >= 5 && (
                             <div id="autocollapse">
                               <div className="autocollapseWrapper">
                                 <div
@@ -1151,7 +1149,7 @@ class App extends React.Component {
                           return (
                             <div
                               className={
-                                "upgrade button" +
+                                "interstellar upgrade button" +
                                 (interstellarUpgradeCosts[upgradeDef.id]
                                   .capped ||
                                 s.interstellar.photons <
@@ -1349,7 +1347,7 @@ class App extends React.Component {
       if (name === "particleMass") {
         star.particleRadius =
           (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
-        if (state.interstellar.stellarMilestonesUnlocked >= 8) {
+        if (state.interstellar.stellarMilestonesUnlocked >= 7) {
           star.starMass += star.particleMass;
         }
       }
@@ -1464,7 +1462,7 @@ class App extends React.Component {
   };
 
   genParticle = (star, offScreen, existing, starRadiusSq) => {
-    if (this.state.interstellar.stellarMilestonesUnlocked >= 7) {
+    if (this.state.interstellar.stellarMilestonesUnlocked >= 6) {
       offScreen = false;
     }
     let pRad = star.particleRadius;
@@ -1539,21 +1537,38 @@ class App extends React.Component {
     collapseTimes,
     collapseLengths
   ) {
-    let red, green, blue;
+    let    baseS = 71.9,
+      baseL = 4;
+    let targetH, targetS, targetL;
     if (mass <= collapseMass) {
       let ratio = Math.log(mass) / Math.log(collapseMass);
-      red = ratio * 87 + 10;
-      green = ratio * 5;
-      blue = ratio * 5;
+      targetH = 29.6 + ratio * (9.9-29.6);
+      targetS = 87.1;
+      targetL = 19.6;
+      baseL = baseL * (1 + 0.1 * ratio);
     } else if (mass <= yellowCollapseMass) {
-      let ratio = Math.log(mass / collapseMass) / Math.log(yellowCollapseMass);
-      red = ratio * 66 + 97;
-      green = ratio * 129 + 5;
-      blue = ratio * 15 + 5;
+      let ratio = Math.log(mass / collapseMass) / Math.log(yellowCollapseMass / collapseMass);
+      targetH = 9.9 + ratio * (64.6 - 9.9);
+      targetS = 87.1 + ratio * (90.1 - 87.1);
+      targetL = 19.6 + ratio * (75.7 - 19.6);
+      baseL = baseL * (1.1 + 0.1 * ratio)
+    } else if (mass <= whiteCollapseMass) {
+      let ratio = Math.log(mass / yellowCollapseMass) / Math.log(whiteCollapseMass/yellowCollapseMass);
+      targetH = 64.6 + ratio * (64.6-64.6);
+      targetS = 90.1 + ratio * (0-90.1);
+      targetL = 75.7 + ratio * (95.6-75.7);
+      baseL = baseL * (1.2 + 0.1 * ratio)
+    }else if (mass <= blueCollapseMass) {
+      let ratio = Math.log(mass / whiteCollapseMass) / Math.log(blueCollapseMass/whiteCollapseMass);
+      targetH = 228.6;
+      targetS = 0 + ratio * (72.8-0);
+      targetL = 95.6 + ratio * (72.8-95.6);
+      baseL = baseL * (1.3 + 0.1 * ratio)
     } else {
-      red = 232;
-      green = 199;
-      blue = 35;
+      targetH = 228.6;
+      targetS = 72.8
+      targetL = 72.8
+      baseL = 1.4
     }
     let intensity = colorFrame / 5;
     if (colorFrame >= 5) {
@@ -1565,21 +1580,18 @@ class App extends React.Component {
       } else if (collapseFrame < collapseTimes.shrink) {
         intensity =
           (collapseFrame - collapseTimes.recolor) / collapseLengths.shrink;
-      } else if (collapseFrame < collapseTimes.pause) {
+      } else  {
         intensity = 1;
-      } else if (collapseFrame < collapseTimes.expand) {
-        intensity *=
-          1 +
-          0.2 *
-            ((collapseFrame - collapseTimes.pause) / collapseLengths.expand);
-      } else {
-        intensity = 1.2;
       }
     }
-    red = intensity * (red - 10) + 10;
-    blue = intensity * blue;
-    green = intensity * green;
-    return "rgb(" + red + "," + green + "," + blue + ")";
+    //let s = baseS + (targetS - baseS) * intensity;
+    let s = targetS;
+    let l = baseL + (targetL - baseL) * intensity;
+    //if (Math.random() < 0.07) {
+      //console.log("hsl", targetH, baseS, targetS, baseL, targetL);
+    //}
+    //console.log('hsl', targetH, s, l, hsluvToHex([targetH, s, l]))
+    return hsluvToHex([targetH, s, l]);
   }
 
   drawCanvas = (canvas, star, field, interstellar, autocollapse) => {
@@ -1591,24 +1603,24 @@ class App extends React.Component {
       collapseLengths = fastCollapseLengths;
     }
     let starRadius = this.getStarRadius(star, collapseTimes, collapseLengths);
-    let starRadiusSq = starRadius ** 2;
 
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
     const ctx = canvas.getContext("2d", { alpha: false });
-    ctx.fillStyle = "#484848";
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
     if (
       (autocollapse.mass.enabled ||
         autocollapse.timesMass.enabled ||
         autocollapse.seconds.enabled) &&
-      interstellar.stellarMilestonesUnlocked >= 9 &&
-      star.lifetime < 1
+      interstellar.stellarMilestonesUnlocked >= 8 &&
+      star.lifetime < 0.2
     ) {
-      return}
-    
+      return;
+    }
+
     ctx.beginPath();
-    ctx.strokeStyle = "#333";
+    ctx.strokeStyle = "#222";
     let gridX = star.gridX;
     while (gridX < canvas.width) {
       if (gridX >= 0) {
@@ -1644,7 +1656,7 @@ class App extends React.Component {
     }
     ctx.arc(cx, cy, starRadius, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#23170e";
     let pCount = 0;
     let ringSize = 0,
       ringSizeSq = 0;
@@ -2032,7 +2044,9 @@ class App extends React.Component {
       }
       if (!star.collapsing) {
         for (let i = field.particles.length; i < star.particleCount; i++) {
-          field.particles.push(this.genParticle(star, true, undefined, starRadiusSq));
+          field.particles.push(
+            this.genParticle(star, true, undefined, starRadiusSq)
+          );
         }
         if (star.milestonesUnlocked >= 5) {
           if (s.autocollapse[index].mass.enabled) {
@@ -2040,7 +2054,7 @@ class App extends React.Component {
             if (!isNaN(value) && newMass >= value) {
               star.collapsing = true;
               star.collapseFrame = 0;
-              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+              if (s.interstellar.stellarMilestonesUnlocked >= 8) {
                 star.collapseFrame = collapseTimes.revel;
               }
             }
@@ -2050,7 +2064,7 @@ class App extends React.Component {
             if (!isNaN(value) && newMass >= value * this.interstellarMass) {
               star.collapsing = true;
               star.collapseFrame = 0;
-              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+              if (s.interstellar.stellarMilestonesUnlocked >= 8) {
                 star.collapseFrame = collapseTimes.revel;
               }
             }
@@ -2060,7 +2074,7 @@ class App extends React.Component {
             if (!isNaN(value) && star.lifetime >= value) {
               star.collapsing = true;
               star.collapseFrame = 0;
-              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+              if (s.interstellar.stellarMilestonesUnlocked >= 8) {
                 star.collapseFrame = collapseTimes.revel;
               }
             }
