@@ -179,7 +179,7 @@ const stellarMilestones = [
   {
     value: 180,
     name: "Faster Auto-Collapse",
-    description: "Auto-Collapses occur faster than ever",
+    description: "Auto-Collapse animations take half the time",
   },
   {
     value: 300,
@@ -246,14 +246,13 @@ const fastestCollapseLengths = {
 
 // only setState once per gameLoop and take state as argument
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
-// darker background. lighter particles. light up particles from sun?
 // option to disable sun light?
 // math descriptions
-// constellations give a multiplicative bonus (e.g. * # stars or even ** (sqrt(# stars))
 // stats page (or show # of stars on stellar milestones) - instead of create protostar button
 // hotkeys
-// draw stars in background biased towards viewport
-// multiplicative bonus that is explained somewhat
+// animate moving to the star location
+// move interstellar photons and maybe other things to top header
+// victory animation/ notification
 
 // Lower priority
 // TODO: Animate log/other things
@@ -351,6 +350,7 @@ class App extends React.Component {
       interstellarTab: "info",
       tab: "upgrades",
       particleLimit: 1000,
+      won: false,
       interstellar: {
         completedStars: [],
         completedConstellations: [],
@@ -959,9 +959,7 @@ class App extends React.Component {
                                 >
                                   Auto-collapse
                                 </div>
-                              
                               </div>
-                             
                             </div>
                           )}
                         </>
@@ -1092,6 +1090,19 @@ class App extends React.Component {
                     >
                       Stellar Milestones
                     </div>
+                    {s.won && (
+                      <div
+                        className={
+                          "tab " +
+                          (s.interstellarTab === "victory" ? "selected" : "")
+                        }
+                        onClick={() =>
+                          this.setState({ interstellarTab: "victory" })
+                        }
+                      >
+                        Victory
+                      </div>
+                    )}
                   </div>
                   <div className="tabPane">
                     {s.interstellarTab === "info" && (
@@ -1274,6 +1285,15 @@ class App extends React.Component {
                           );
                         })}
                       </div>
+                    )}
+                    {s.interstellarTab === "victory" && (
+                      <>
+                        <p>
+                          The universe is light.
+                        </p>
+                        <p>Congratulations! Thanks for playing!</p>
+                        <p>You can keep playing, but the star field is capped at 20k stars, and progress gets very slow.</p>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1898,6 +1918,7 @@ class App extends React.Component {
         completedConstellations: [...s.interstellar.completedConstellations],
         completedGalaxies: [...s.interstellar.completedGalaxies],
       },
+      won: s.won,
     };
     while (
       updates.interstellar.milestonesUnlocked < stellarMassMilestones.length &&
@@ -2234,6 +2255,7 @@ class App extends React.Component {
       2 * Math.PI
     );
     ctx.fill();
+    let forceResize = false;
     if (updates.interstellar.completedStars.length < 20000) {
       updates.interstellar.completedStars.push(completedStar);
     }
@@ -2242,6 +2264,12 @@ class App extends React.Component {
       10 *
       (updates.interstellar.interstellarMass / 1e25) *
       updates.interstellar.collapseCount;
+    if (!updates.won && updates.interstellar.interstellarPhotonIncome >= 1e25) {
+      updates.headerTab = "interstellar";
+      updates.interstellarTab = "victory";
+      updates.won = true;
+      forceResize = true;
+    }
 
     while (
       updates.interstellar.stellarMilestonesUnlocked <
@@ -2259,7 +2287,6 @@ class App extends React.Component {
         updates.stars.push(star);
       }
     }
-    let forceResize = false;
     if (updates.interstellar.stellarMilestonesUnlocked < 2) {
       updates.headerTab = "interstellar";
       star.collapsed = true;
@@ -2313,6 +2340,5 @@ function itoa(num, noFrac, noFracFixed, unitSuffix = "") {
   return (num / base).toFixed(3) + suffix + unitSuffix;
 }
 window.itoa = itoa;
-const addMass = (acc, val) => acc + val.mass;
 
 export default App;
