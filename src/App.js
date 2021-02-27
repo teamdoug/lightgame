@@ -10,9 +10,9 @@ const accelerationCap = 300;
 const gravity = 200000;
 const mouseAcceleration = 300;
 const collapseMass = 5e24;
-const yellowCollapseMass = 1e33;
-const whiteCollapseMass = 1e40;
-const blueCollapseMass = 1e45;
+const yellowCollapseMass = 1e31;
+const whiteCollapseMass = 1e36;
+const blueCollapseMass = 1e40;
 const starDragConstant = 1;
 const photonUpgradeDef = {
   particlePhotons: {
@@ -342,6 +342,17 @@ class App extends React.Component {
           seconds: { value: 0, enabled: false },
         },
       ],
+      autobuyersEnabled: [{
+        particlePhotons: false,
+        particleCount: false,
+        particleMass: false,
+      },
+      {
+        particlePhotons: false,
+        particleCount: false,
+        particleMass: false,
+      },
+    ],
     };
     state.stars.push(this.getInitStar(state));
     return state;
@@ -363,6 +374,8 @@ class App extends React.Component {
         1 *
         photonUpgradeDef.particlePhotons.effect **
           interstellar.upgrades.bonusParticlePhotons,
+      backgroundX: 0,
+      backgroundY: 0,
       vx: 50,
       vy: 0,
       gridX: 0,
@@ -378,11 +391,6 @@ class App extends React.Component {
         starRadiusFactor: 0,
         permanentMouseGravity: 0,
         gravity: 0,
-      },
-      autobuyersEnabled: {
-        particlePhotons: interstellar.stellarMilestonesUnlocked >= 3,
-        particleCount: interstellar.stellarMilestonesUnlocked >= 3,
-        particleMass: interstellar.stellarMilestonesUnlocked >= 3,
       },
       milestonesUnlocked: interstellar.upgrades.permanentMilestones,
       collapsing: false,
@@ -702,7 +710,7 @@ class App extends React.Component {
                                 <div
                                   className={
                                     "autobuyer button " +
-                                    (star.autobuyersEnabled.particlePhotons
+                                    (s.autobuyersEnabled[starIndex].particlePhotons
                                       ? "enabled"
                                       : "")
                                   }
@@ -767,7 +775,7 @@ class App extends React.Component {
                                   <div
                                     className={
                                       "autobuyer button " +
-                                      (star.autobuyersEnabled.particleCount
+                                      (s.autobuyersEnabled[starIndex].particleCount
                                         ? "enabled"
                                         : "")
                                     }
@@ -833,7 +841,7 @@ class App extends React.Component {
                                   <div
                                     className={
                                       "autobuyer button " +
-                                      (star.autobuyersEnabled.particleMass
+                                      (s.autobuyersEnabled[starIndex].particleMass
                                         ? "enabled"
                                         : "")
                                     }
@@ -1407,12 +1415,11 @@ class App extends React.Component {
 
   toggleAutobuyer = (starIndex, autobuyer) => {
     this.setState((state) => {
-      let stars = [...state.stars];
-      let star = { ...stars[starIndex] };
-      star.autobuyersEnabled = { ...star.autobuyersEnabled };
-      star.autobuyersEnabled[autobuyer] = !star.autobuyersEnabled[autobuyer];
-      stars[starIndex] = star;
-      return { stars: stars };
+      let autobuyersEnabled = [...state.autobuyersEnabled];
+      let starAutobuyers = { ...autobuyersEnabled[starIndex] };
+      starAutobuyers[autobuyer] = !starAutobuyers[autobuyer];
+      autobuyersEnabled[starIndex] = starAutobuyers;
+      return { autobuyersEnabled: autobuyersEnabled };
     });
   };
 
@@ -1622,6 +1629,19 @@ class App extends React.Component {
       star.lifetime < 0.2
     ) {
       return;
+    }
+
+    for (const compStar of interstellar.completedStars) {
+      ctx.fillStyle = compStar.color;
+      ctx.beginPath();
+      ctx.arc(
+        compStar.x + cx + star.backgroundX,
+        compStar.y + cy + star.backgroundY, 
+        compStar.radius,
+        0,
+        2 * Math.PI
+      );
+      ctx.fill();
     }
 
     ctx.beginPath();
@@ -2115,6 +2135,8 @@ class App extends React.Component {
           photons: newPhotons,
           gridX: (star.gridX - vx * relDelta) % gridSpacing,
           gridY: (star.gridY - vy * relDelta) % gridSpacing,
+          backgroundX: star.backgroundX - vx * relDelta * .02,
+          backgroundY: star.backgroundY - vy * relDelta * .02,
           vx: vx,
           vy: vy,
           velocity: velocity,
@@ -2122,13 +2144,13 @@ class App extends React.Component {
         };
       }
       if (!star.collapsing) {
-        if (star.autobuyersEnabled.particlePhotons) {
+        if (s.autobuyersEnabled[index].particlePhotons) {
           this.buyUpgradeInner("particlePhotons", updates, index, updates);
         }
-        if (star.autobuyersEnabled.particleCount) {
+        if (s.autobuyersEnabled[index].particleCount) {
           this.buyUpgradeInner("particleCount", updates, index, updates);
         }
-        if (star.autobuyersEnabled.particleMass) {
+        if (s.autobuyersEnabled[index].particleMass) {
           this.buyUpgradeInner("particleMass", updates, index, updates);
         }
       }
@@ -2152,11 +2174,26 @@ class App extends React.Component {
       updates.featureTriggers.firstCollapse = true;
       //updates.logText.unshift(logTexts.firstCollapse);
     }
-    updates.interstellar.completedStars.push({
-      mass: star.starMass,
-      name: "Star 1", // todo use real index
-    });
     updates.interstellar.collapseCount++;
+
+    let minR = 21;
+    if (updates.interstellar.collapseCount < 20) {
+      minR = 50;
+    }
+    let maxR = 300 + updates.interstellar.collapseCount;
+    if (maxR > 400) {
+      maxR = 400 * (maxR / 400) ** 0.4;
+    }
+    let r = minR + getRandomInt(300 + updates.interstellar.collapseCount);
+    let theta = Math.random() * 2 * Math.PI;
+    let completedStar = {
+      mass: star.starMass,
+      color: this.getStarColor(star.starMass, 5, 0, {}, {}),
+      x: r * Math.cos(theta),
+      y: r * Math.sin(theta),
+      radius: 1 + Math.log(star.starMass / collapseMass) / Math.log(1000000),
+    };
+    updates.interstellar.completedStars.push(completedStar);
     while (
       updates.interstellar.stellarMilestonesUnlocked <
         stellarMilestones.length &&
