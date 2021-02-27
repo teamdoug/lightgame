@@ -166,32 +166,45 @@ const stellarMilestones = [
     description: "You can set protostars to auto-collapse",
   },
 ];
+
 /*
-const collapseTimes = {
+const slowCollapseTimes = {
   recolor: 2,
   shrink: 4,
   pause: 5,
   expand: 5.05,
   ring: 6,
-  revel: 8,
-};
-*/
-const collapseTimes = {
+  revel: 7,
+};*/
+
+const fastCollapseTimes = {
   recolor: 0.5,
   shrink: 1,
   pause: 1.5,
   expand: 1.55,
   ring: 2,
-  revel: 2,
+  revel: 2.5,
 };
-const collapseLengths = {
-  recolor: collapseTimes.recolor,
-  shrink: collapseTimes.shrink - collapseTimes.recolor,
-  pause: collapseTimes.pause - collapseTimes.shrink,
-  expand: collapseTimes.expand - collapseTimes.pause,
-  ring: collapseTimes.ring - collapseTimes.expand,
-  revel: collapseTimes.revel - collapseTimes.ring,
+/*
+const slowCollapseLengths = {
+  recolor: slowCollapseTimes.recolor,
+  shrink: slowCollapseTimes.shrink - slowCollapseTimes.recolor,
+  pause: slowCollapseTimes.pause - slowCollapseTimes.shrink,
+  expand: slowCollapseTimes.expand - slowCollapseTimes.pause,
+  ring: slowCollapseTimes.ring - slowCollapseTimes.expand,
+  revel: slowCollapseTimes.revel - slowCollapseTimes.ring,
+};*/
+const fastCollapseLengths = {
+  recolor: fastCollapseTimes.recolor,
+  shrink: fastCollapseTimes.shrink - fastCollapseTimes.recolor,
+  pause: fastCollapseTimes.pause - fastCollapseTimes.shrink,
+  expand: fastCollapseTimes.expand - fastCollapseTimes.pause,
+  ring: fastCollapseTimes.ring - fastCollapseTimes.expand,
+  revel: fastCollapseTimes.revel - fastCollapseTimes.ring,
 };
+// todo remove
+const slowCollapseTimes = fastCollapseTimes;
+const slowCollapseLengths = fastCollapseLengths;
 
 // only setState once per gameLoop and take state as argument
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
@@ -218,6 +231,7 @@ const collapseLengths = {
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
 // TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
 // refactor photon upgrades
+// better animatino for protostar creation
 
 const logTexts = {
   opening: "The universe is dark.",
@@ -306,6 +320,18 @@ class App extends React.Component {
         unlockCollapse: false,
         firstCollapse: false,
       },
+      autocollapse: [
+        {
+          mass: { value: 0, enabled: false },
+          timesMass: { value: 0, enabled: false },
+          seconds: { value: 0, enabled: false },
+        },
+        {
+          mass: { value: 0, enabled: false },
+          timesMass: { value: 0, enabled: false },
+          seconds: { value: 0, enabled: false },
+        },
+      ],
     };
     state.stars.push(this.getInitStar(state));
     return state;
@@ -351,6 +377,7 @@ class App extends React.Component {
       milestonesUnlocked: interstellar.upgrades.permanentMilestones,
       collapsing: false,
       collapseFrame: 0,
+      lifetime: 0,
     };
     return star;
   };
@@ -365,7 +392,7 @@ class App extends React.Component {
     };
   };
 
-  getStarRadius = (star) => {
+  getStarRadius = (star, collapseTimes, collapseLengths) => {
     const defaultRadius =
       20 +
       (star.starRadiusFactor * Math.log(star.starMass / 10)) /
@@ -471,7 +498,7 @@ class App extends React.Component {
       s.headerTab === "protostar" || s.headerTab === "protostar2";
     const canvas = this.canvas.current;
     if (canvas !== null && showProtostar) {
-      this.drawCanvas(canvas, star, field);
+      this.drawCanvas(canvas, star, field, s.interstellar);
     }
     let winProgress =
       (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
@@ -612,12 +639,10 @@ class App extends React.Component {
                       {s.tab === "upgrades" && (
                         <>
                           <div id="upgrades">
-                            <div class="wrapper">
+                            <div className="wrapper">
                               <div
                                 style={{
-                                  "flex-basis": autobuyersEnabled
-                                    ? "80%"
-                                    : "100%",
+                                  flexBasis: autobuyersEnabled ? "80%" : "100%",
                                 }}
                                 className={
                                   "upgrade button" +
@@ -658,17 +683,29 @@ class App extends React.Component {
                                 </p>
                               </div>
                               {autobuyersEnabled && (
-                                <div className={"autobuyer button " + (star.autobuyersEnabled.particlePhotons ? 'enabled' : '')}
-                                onClick={() => this.toggleAutobuyer(starIndex, 'particlePhotons')}>
+                                <div
+                                  className={
+                                    "autobuyer button " +
+                                    (star.autobuyersEnabled.particlePhotons
+                                      ? "enabled"
+                                      : "")
+                                  }
+                                  onClick={() =>
+                                    this.toggleAutobuyer(
+                                      starIndex,
+                                      "particlePhotons"
+                                    )
+                                  }
+                                >
                                   <p>Autobuy</p>
                                 </div>
                               )}
                             </div>
                             {ft.firstUpgrade && (
-                              <div class="wrapper">
+                              <div className="wrapper">
                                 <div
                                   style={{
-                                    "flex-basis": autobuyersEnabled
+                                    flexBasis: autobuyersEnabled
                                       ? "80%"
                                       : "100%",
                                   }}
@@ -711,18 +748,30 @@ class App extends React.Component {
                                   </p>
                                 </div>
                                 {autobuyersEnabled && (
-                                <div className={"autobuyer button " + (star.autobuyersEnabled.particleCount ? 'enabled' : '')}
-                                onClick={() => this.toggleAutobuyer(starIndex, 'particleCount')}>
-                                  <p>Autobuy</p>
-                                </div>
-                              )}
+                                  <div
+                                    className={
+                                      "autobuyer button " +
+                                      (star.autobuyersEnabled.particleCount
+                                        ? "enabled"
+                                        : "")
+                                    }
+                                    onClick={() =>
+                                      this.toggleAutobuyer(
+                                        starIndex,
+                                        "particleCount"
+                                      )
+                                    }
+                                  >
+                                    <p>Autobuy</p>
+                                  </div>
+                                )}
                               </div>
                             )}
                             {ft.unlockMass && (
-                              <div class="wrapper">
+                              <div className="wrapper">
                                 <div
                                   style={{
-                                    "flex-basis": autobuyersEnabled
+                                    flexBasis: autobuyersEnabled
                                       ? "80%"
                                       : "100%",
                                   }}
@@ -765,11 +814,23 @@ class App extends React.Component {
                                   </p>
                                 </div>
                                 {autobuyersEnabled && (
-                                <div className={"autobuyer button " + (star.autobuyersEnabled.particleMass ? 'enabled' : '')}
-                                onClick={() => this.toggleAutobuyer(starIndex, 'particleMass')}>
-                                  <p>Autobuy</p>
-                                </div>
-                              )}
+                                  <div
+                                    className={
+                                      "autobuyer button " +
+                                      (star.autobuyersEnabled.particleMass
+                                        ? "enabled"
+                                        : "")
+                                    }
+                                    onClick={() =>
+                                      this.toggleAutobuyer(
+                                        starIndex,
+                                        "particleMass"
+                                      )
+                                    }
+                                  >
+                                    <p>Autobuy</p>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -793,6 +854,107 @@ class App extends React.Component {
                               </div>
                             </div>
                           )}
+                          {s.interstellar.stellarMilestonesUnlocked >= 6 && (
+                            <div id="autocollapse">
+                              <div className="autocollapseWrapper">
+                                <div
+                                  className={
+                                    "button autocollapser " +
+                                    (s.autocollapse[starIndex].mass.enabled
+                                      ? "enabled"
+                                      : "")
+                                  }
+                                  onClick={() =>
+                                    this.toggleAutocollapser(starIndex, "mass")
+                                  }
+                                >
+                                  Auto-collapse
+                                </div>
+                                {" at "}
+                                <input
+                                  type="text"
+                                  value={s.autocollapse[starIndex].mass.value}
+                                  onChange={(event) => {
+                                    this.updateAutocollapse(
+                                      starIndex,
+                                      "mass",
+                                      event.target.value
+                                    );
+                                    event.preventDefault();
+                                  }}
+                                />
+                                g
+                              </div>
+                              <div className="autocollapseWrapper">
+                                <div
+                                  className={
+                                    "button autocollapser " +
+                                    (s.autocollapse[starIndex].timesMass.enabled
+                                      ? "enabled"
+                                      : "")
+                                  }
+                                  onClick={() =>
+                                    this.toggleAutocollapser(
+                                      starIndex,
+                                      "timesMass"
+                                    )
+                                  }
+                                >
+                                  Auto-collapse
+                                </div>
+                                {" at "}
+                                <input
+                                  type="text"
+                                  value={
+                                    s.autocollapse[starIndex].timesMass.value
+                                  }
+                                  onChange={(event) => {
+                                    this.updateAutocollapse(
+                                      starIndex,
+                                      "timesMass",
+                                      event.target.value
+                                    );
+                                    event.preventDefault();
+                                  }}
+                                />{" "}
+                                times the current interstellar mass
+                              </div>
+                              <div className="autocollapseWrapper">
+                                <div
+                                  className={
+                                    "button autocollapser " +
+                                    (s.autocollapse[starIndex].seconds.enabled
+                                      ? "enabled"
+                                      : "")
+                                  }
+                                  onClick={() =>
+                                    this.toggleAutocollapser(
+                                      starIndex,
+                                      "seconds"
+                                    )
+                                  }
+                                >
+                                  Auto-collapse
+                                </div>
+                                {" after "}
+                                <input
+                                  type="text"
+                                  value={
+                                    s.autocollapse[starIndex].seconds.value
+                                  }
+                                  onChange={(event) => {
+                                    this.updateAutocollapse(
+                                      starIndex,
+                                      "seconds",
+                                      event.target.value
+                                    );
+                                    event.preventDefault();
+                                  }}
+                                />{" "}
+                                seconds (at {itoa(star.lifetime, true)} seconds)
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
                       {s.tab === "milestones" && (
@@ -813,6 +975,7 @@ class App extends React.Component {
                                     ? " disabled"
                                     : "")
                                 }
+                                key={msIndex}
                               >
                                 <p>
                                   <span className="upgradeName">
@@ -937,19 +1100,21 @@ class App extends React.Component {
                           on "I Love Math" mode in the settings if you want
                           better details. Good luck!
                         </p>
-                        <div
-                          className={
-                            "collapse button" +
-                            (s.stars.length > 0 ? " disabled" : "")
-                          }
-                          onClick={() => this.createProtostar()}
-                        >
-                          <p>
-                            <span className="upgradeName">
-                              Create New Protostar
-                            </span>
-                          </p>
-                        </div>
+                        {s.interstellar.stellarMilestonesUnlocked < 2 && (
+                          <div
+                            className={
+                              "collapse button" +
+                              (s.stars.length > 0 ? " disabled" : "")
+                            }
+                            onClick={() => this.createProtostar()}
+                          >
+                            <p>
+                              <span className="upgradeName">
+                                Create New Protostar
+                              </span>
+                            </p>
+                          </div>
+                        )}
                       </>
                     )}
                     {s.interstellarTab === "upgrades" && (
@@ -959,7 +1124,11 @@ class App extends React.Component {
                             upgradeDef.id === "bonusParticleMass" &&
                             s.interstellar.milestonesUnlocked < 3
                           ) {
-                            return <></>;
+                            return (
+                              <React.Fragment
+                                key={upgradeDef.id}
+                              ></React.Fragment>
+                            );
                           }
                           return (
                             <div
@@ -1019,6 +1188,7 @@ class App extends React.Component {
                                   ? " disabled"
                                   : "")
                               }
+                              key={msIndex}
                             >
                               <p>
                                 <span className="upgradeName">
@@ -1054,6 +1224,7 @@ class App extends React.Component {
                                   ? " disabled"
                                   : "")
                               }
+                              key={msIndex}
                             >
                               <p>
                                 <span className="upgradeName">
@@ -1088,7 +1259,12 @@ class App extends React.Component {
                 onMouseLeave={this.mouseMove}
               ></canvas>
             )}
-            {s.headerTab === "interstellar" && "Star gallery"}
+            {s.headerTab === "interstellar" && (
+              <span>
+                Star gallery{" " + s.interstellar.collapseCount + " "} stars
+                created
+              </span>
+            )}
           </div>
         </div>
         {ft.firstCollapse && (
@@ -1131,7 +1307,7 @@ class App extends React.Component {
   };
 
   buyUpgradeInner = (name, updates, starIndex, state) => {
-    let star=updates.stars[starIndex];
+    let star = updates.stars[starIndex];
     let cost = this.calcUpgradeCosts(star, state)[name];
     while (cost.cost < star.photons) {
       star.photons -= cost.cost;
@@ -1153,15 +1329,15 @@ class App extends React.Component {
         updates.logText.unshift(logTexts.unlockMass);
       }
       if (name === "particleMass") {
-        star.particleRadius = (5 * star.particleMass) ** 0.3;
+        star.particleRadius =
+          (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
       }
       if (state.interstellar.stellarMilestonesUnlocked < 1) {
         return updates;
       }
       cost = this.calcUpgradeCosts(star, state)[name];
     }
-
-  }
+  };
 
   buyInterstellarUpgrade = (id, cost) => {
     this.setState((state) => {
@@ -1214,12 +1390,36 @@ class App extends React.Component {
     this.setState((state) => {
       let stars = [...state.stars];
       let star = { ...stars[starIndex] };
-      star.autobuyersEnabled = {...star.autobuyersEnabled}
-      star.autobuyersEnabled[autobuyer] = !star.autobuyersEnabled[autobuyer]
+      star.autobuyersEnabled = { ...star.autobuyersEnabled };
+      star.autobuyersEnabled[autobuyer] = !star.autobuyersEnabled[autobuyer];
       stars[starIndex] = star;
-      return {stars: stars}
-    })
-  }
+      return { stars: stars };
+    });
+  };
+
+  toggleAutocollapser = (starIndex, autocollapserName) => {
+    this.setState((state) => {
+      let allAutocollapsers = [...state.autocollapse];
+      let starAutocollapsers = { ...allAutocollapsers[starIndex] };
+      let autocollapser = { ...starAutocollapsers[autocollapserName] };
+      autocollapser.enabled = !autocollapser.enabled;
+      starAutocollapsers[autocollapserName] = autocollapser;
+      allAutocollapsers[starIndex] = starAutocollapsers;
+      return { autocollapse: allAutocollapsers };
+    });
+  };
+
+  updateAutocollapse = (starIndex, autocollapserName, value) => {
+    this.setState((state) => {
+      let allAutocollapsers = [...state.autocollapse];
+      let starAutocollapsers = { ...allAutocollapsers[starIndex] };
+      let autocollapser = { ...starAutocollapsers[autocollapserName] };
+      autocollapser.value = value;
+      starAutocollapsers[autocollapserName] = autocollapser;
+      allAutocollapsers[starIndex] = starAutocollapsers;
+      return { autocollapse: allAutocollapsers };
+    });
+  };
 
   modifyStar = (starIndex, prop, increase) => {
     let stars = [...this.state.stars];
@@ -1307,7 +1507,13 @@ class App extends React.Component {
     return vel;
   };
 
-  getStarColor(mass, colorFrame, collapseFrame) {
+  getStarColor(
+    mass,
+    colorFrame,
+    collapseFrame,
+    collapseTimes,
+    collapseLengths
+  ) {
     let red, green, blue;
     if (mass <= collapseMass) {
       let ratio = Math.log(mass) / Math.log(collapseMass);
@@ -1351,9 +1557,15 @@ class App extends React.Component {
     return "rgb(" + red + "," + green + "," + blue + ")";
   }
 
-  drawCanvas = (canvas, star, field) => {
+  drawCanvas = (canvas, star, field, interstellar) => {
     let pRad = star.particleRadius;
-    let starRadius = this.getStarRadius(star);
+    let collapseTimes = slowCollapseTimes;
+    let collapseLengths = slowCollapseLengths;
+    if (interstellar.stellarMilestonesUnlocked >= 4) {
+      collapseTimes = fastCollapseTimes;
+      collapseLengths = fastCollapseLengths;
+    }
+    let starRadius = this.getStarRadius(star, collapseTimes, collapseLengths);
 
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
@@ -1386,7 +1598,9 @@ class App extends React.Component {
     ctx.fillStyle = this.getStarColor(
       star.starMass,
       field.colorFrame,
-      star.collapseFrame
+      star.collapseFrame,
+      collapseTimes,
+      collapseLengths
     );
     ctx.beginPath();
     if (star.collapsing && star.collapseFrame < collapseTimes.expand) {
@@ -1404,7 +1618,12 @@ class App extends React.Component {
       star.collapseFrame >= collapseTimes.expand &&
       star.collapseFrame < collapseTimes.ring
     ) {
-      ringSize = this.getCollapseRingSize(star.collapseFrame, starRadius);
+      ringSize = this.getCollapseRingSize(
+        star.collapseFrame,
+        starRadius,
+        collapseTimes,
+        collapseLengths
+      );
       ringSizeSq = ringSize ** 2;
     }
     if (!star.collapsing || star.collapseFrame <= collapseTimes.ring) {
@@ -1440,7 +1659,12 @@ class App extends React.Component {
       ctx.arc(
         cx,
         cy,
-        this.getCollapseRingSize(star.collapseFrame, starRadius),
+        this.getCollapseRingSize(
+          star.collapseFrame,
+          starRadius,
+          collapseTimes,
+          collapseLengths
+        ),
         0,
         2 * Math.PI
       );
@@ -1533,7 +1757,12 @@ class App extends React.Component {
     this.setState({ paused: !this.state.paused });
   };
 
-  getCollapseRingSize = (collapseFrame, radius) => {
+  getCollapseRingSize = (
+    collapseFrame,
+    radius,
+    collapseTimes,
+    collapseLengths
+  ) => {
     const maxSize = Math.max(maxWidth, maxHeight) * 2;
     return (
       radius +
@@ -1586,19 +1815,17 @@ class App extends React.Component {
       visibleStarIndex = 1;
     }
     for (let [index, star] of updates.stars.entries()) {
-      if (star.autobuyersEnabled.particlePhotons) {
-        this.buyUpgradeInner('particlePhotons', updates, index, s);
-      }
-      if (star.autobuyersEnabled.particleCount) {
-        this.buyUpgradeInner('particleCount', updates, index, s);
-      }
-      if (star.autobuyersEnabled.particleMass) {
-        this.buyUpgradeInner('particleMass', updates, index, s);
+      star.lifetime += relDelta;
+      let collapseTimes = slowCollapseTimes;
+      let collapseLengths = slowCollapseLengths;
+      if (updates.interstellar.stellarMilestonesUnlocked >= 4) {
+        collapseTimes = fastCollapseTimes;
+        collapseLengths = fastCollapseLengths;
       }
       star.particleRadius =
         (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
       let field = this.fields[index];
-      let starRadius = this.getStarRadius(star);
+      let starRadius = this.getStarRadius(star, collapseTimes, collapseLengths);
       let [leftEdge, topEdge] = [
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
@@ -1771,6 +1998,29 @@ class App extends React.Component {
         for (let i = field.particles.length; i < star.particleCount; i++) {
           field.particles.push(this.genParticle(star, true));
         }
+        if (star.milestonesUnlocked >= 5) {
+          if (s.autocollapse[index].mass.enabled) {
+            let value = Number(s.autocollapse[index].mass.value);
+            if (!isNaN(value) && newMass >= value) {
+              star.collapsing = true;
+              star.collapseFrame = 0;          
+            }
+          }
+          if (s.autocollapse[index].timesMass.enabled) {
+            let value = Number(s.autocollapse[index].timesMass.value);
+            if (!isNaN(value) && newMass >= value*this.interstellarMass) {
+              star.collapsing = true;
+              star.collapseFrame = 0;          
+            }
+          }
+          if (s.autocollapse[index].seconds.enabled) {
+            let value = Number(s.autocollapse[index].seconds.value);
+            if (!isNaN(value) && star.lifetime >= value) {
+              star.collapsing = true;
+              star.collapseFrame = 0;          
+            }
+          }
+        }
       }
       let collapsed = false;
       if (star.collapsing) {
@@ -1793,6 +2043,7 @@ class App extends React.Component {
           this.finishCollapse(updates.stars, index, updates);
         }
       }
+
       if (!collapsed) {
         updates.stars[index] = {
           ...star,
@@ -1805,6 +2056,17 @@ class App extends React.Component {
           velocity: velocity,
           milestonesUnlocked: milestonesUnlocked,
         };
+      }
+      if (!star.collapsing) {
+        if (star.autobuyersEnabled.particlePhotons) {
+          this.buyUpgradeInner("particlePhotons", updates, index, updates);
+        }
+        if (star.autobuyersEnabled.particleCount) {
+          this.buyUpgradeInner("particleCount", updates, index, updates);
+        }
+        if (star.autobuyersEnabled.particleMass) {
+          this.buyUpgradeInner("particleMass", updates, index, updates);
+        }
       }
     }
     this.setState(updates);
@@ -1865,6 +2127,9 @@ function getRandomInt(max) {
 }
 
 function itoa(num, noFrac, noFracFixed, unitSuffix = "") {
+  if (num === undefined) {
+    return "undefined";
+  }
   if (num > 1e15) {
     let oom = Math.floor(Math.log(num) / Math.log(10));
     return (num / 10 ** oom).toFixed(2) + "e" + oom + unitSuffix;

@@ -172,6 +172,23 @@ body {
   padding: 10px;
 }
 
+#autocollapse {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.autocollapser.enabled {
+  background-color: #151;
+}
+
+.autocollapser.enabled:hover {
+  background-color: #1d8a1d;
+}
+
+.autocollapseWrapper {
+  margin-bottom: 10px;
+}
+
 .upgradeName {
   font-weight: bold;
 }
