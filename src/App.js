@@ -206,7 +206,7 @@ const fastCollapseTimes = {
   expand: 1.55,
   ring: 2,
   revel: 2.5,
-  background: 3,
+  background: 2.5,
 };
 
 const fastestCollapseTimes = {
@@ -216,7 +216,7 @@ const fastestCollapseTimes = {
   expand: 0.8,
   ring: 1,
   revel: 1.25,
-  background: 1.5,
+  background: 1.25,
 };
 
 const slowCollapseLengths = {
@@ -579,7 +579,7 @@ class App extends React.Component {
         star,
         field,
         s.interstellar,
-        s.autocollapsersEnabled[starIndex],
+        s.autocollapsersEnabled[starIndex]
       );
     }
     const bgCanvas = this.backgroundCanvas.current;
@@ -1451,7 +1451,11 @@ class App extends React.Component {
     if (star.collapsing || star.milestonesUnlocked < 5) {
       return;
     }
-    this.prepCollapse(star, this.state.interstellar, this.state.autocollapsersEnabled[starIndex]);
+    this.prepCollapse(
+      star,
+      this.state.interstellar,
+      this.state.autocollapsersEnabled[starIndex]
+    );
     stars[starIndex] = star;
     this.setState({
       stars: stars,
@@ -1641,7 +1645,7 @@ class App extends React.Component {
     star,
     field,
     interstellar,
-    autocollapserEnabled,
+    autocollapserEnabled
   ) => {
     let pRad = star.particleRadius;
     let collapseTimes = star.collapseTimes;
@@ -1703,16 +1707,27 @@ class App extends React.Component {
       collapseLengths
     );
     ctx.beginPath();
-    let renderedX = 0, renderedY = 0;
+    let renderedX = 0,
+      renderedY = 0;
     if (star.collapsing && star.collapseFrame < collapseTimes.expand) {
       renderedX = getRandomInt(4) - 2;
       renderedY = getRandomInt(4) - 2;
     } else if (star.collapsing && star.collapseFrame > collapseTimes.revel) {
-      renderedX = star.completedX * (star.collapseFrame - collapseTimes.revel)/collapseLengths.background;
-      console.log("cx", cx)
-      renderedY= star.completedY * (star.collapseFrame - collapseTimes.revel)/collapseLengths.background;
+      let backgroundX = star.backgroundX;
+      let backgroundY = star.backgroundY;
+      if (interstellar.collapseCount === 0) {
+        backgroundX = 0;
+        backgroundY = 0;
+      }
+      renderedX =
+        ((backgroundX+star.completedX) * (star.collapseFrame - collapseTimes.revel)) /
+        collapseLengths.background;
+      console.log("cx", cx);
+      renderedY =
+        ((backgroundY+star.completedY) * (star.collapseFrame - collapseTimes.revel)) /
+        collapseLengths.background;
     }
-    ctx.arc(cx+renderedX, cy+renderedY, starRadius, 0, 2 * Math.PI);
+    ctx.arc(cx + renderedX, cy + renderedY, starRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.fillStyle = "#23170e";
     let pCount = 0;
@@ -2015,7 +2030,7 @@ class App extends React.Component {
           vx += ((mouseAcceleration * this.mouseX) / dist / scale) * relDelta;
           vy += ((mouseAcceleration * this.mouseY) / dist / scale) * relDelta;
         }
-      } else if (!star.collapsing || s.interstellar.collapseCount > 0) {
+      } else {
         let vMag = (vx * vx + vy * vy) ** 0.5;
         if (star.collapsing || vMag < 10) {
           starDrag *= 5;
@@ -2044,65 +2059,12 @@ class App extends React.Component {
           vy += ySign * ((starDrag * vy * vy) / vMag) * relDelta;
         }
       }
-      if (star.collapsing && s.interstellar.collapseCount === 0) {
-        let moveLength = collapseTimes.pause - collapseTimes.recolor + (collapseLengths.expand +collapseLengths.ring)/2;
-        if (star.collapseFrame < collapseTimes.recolor) {
-          star.collapseVX = star.backgroundX/.03 / moveLength;
-          star.collapseVY = star.backgroundY/.03 / moveLength;
-          vx = vx + (star.collapseFrame /collapseTimes.recolor) * (star.collapseVX - vx);
-          vy = vy + (star.collapseFrame /collapseTimes.recolor) * (star.collapseVY - vy);
-        } else if (star.collapseFrame < collapseTimes.pause) {
-          vx = star.collapseVX;
-          vy = star.collapseVY;
-        } else if (star.collapseFrame < collapseTimes.ring) {
-          let timeLeft = collapseTimes.ring - star.collapseFrame;
-          let neededVX = star.backgroundX/.03 / timeLeft;
-          let neededVY = star.backgroundY/.03 / timeLeft;
-          vx = vx + ((star.collapseFrame -collapseTimes.pause) /(collapseTimes.ring-collapseTimes.pause)) * (neededVX - vx);
-          vy = vy + ((star.collapseFrame-collapseTimes.pause) /(collapseTimes.ring-collapseTimes.pause)) * (neededVY - vy);
-        } else {
-          vx = star.backgroundX/.03/5;
-          vy=star.backgroundY/.03/5;
-        }
-/*
-        let vMag = (vx * vx + vy * vy) ** 0.5;
-        if (vMag < 5) {
-          starDrag *= 10;
-        }
-        let distSq =
-          star.backgroundX * star.backgroundX +
-          star.backgroundY * star.backgroundY;
-        if (distSq === 0) {
-          vx = vy = 0;
-        } else {
-          let dist = distSq ** 0.5;
-          let vMag = (vx * vx + vy * vy) ** 0.5;
-          let xSign = vx < 0 ? 1 : -1;
-          let ySign = vy < 0 ? 1 : -1;
-          starDrag /= distSq;
-          vx +=
-            ((((100 * gConstant) / dist) * star.backgroundX) / dist +
-              (starDrag * vx * vx * vx) / vMag) *
-            relDelta;
-          vy +=
-            ((((100 * gConstant) / dist) * star.backgroundY) / dist +
-              (starDrag * vy * vy * vy) / vMag) *
-            relDelta;
-        }
-        velocity = (vx * vx + vy * vy) ** 0.5;
 
-        /*
-        moveLength = collapseTimes.pause - collapseTimes.recolor;
-        if (star.collapseFrame < collapseTimes.recolor) {
-          star.collapseVX = 
-        }*/
-      } else {
-        velocity = (vx * vx + vy * vy) ** 0.5;
-        if (velocity > velocityCap) {
-          vx *= velocityCap / velocity;
-          vy *= velocityCap / velocity;
-          velocity = velocityCap;
-        }
+      velocity = (vx * vx + vy * vy) ** 0.5;
+      if (velocity > velocityCap) {
+        vx *= velocityCap / velocity;
+        vy *= velocityCap / velocity;
+        velocity = velocityCap;
       }
 
       let newDrawPhotons = [];
@@ -2158,7 +2120,10 @@ class App extends React.Component {
             updates.featureTriggers.firstPhoton = true;
             updates.logText.unshift(logTexts.firstPhoton);
           }
-          if (field.photons.length < s.particleLimit && (!star.collapsing || star.collapseFrame < collapseTimes.revel)) {
+          if (
+            field.photons.length < s.particleLimit &&
+            (!star.collapsing || star.collapseFrame < collapseTimes.revel)
+          ) {
             field.photons.push(photon);
           }
           newPhotons += star.particlePhotons;
@@ -2210,7 +2175,10 @@ class App extends React.Component {
       }
       let collapsed = false;
       if (star.collapsing) {
-        if (star.collapseFrame >= collapseTimes.expand && star.collapseFrame < collapseTimes.revel) {
+        if (
+          star.collapseFrame >= collapseTimes.expand &&
+          star.collapseFrame < collapseTimes.revel
+        ) {
           let limit = s.particleLimit / 10;
           if (star.collapseFrame >= collapseTimes.revel) {
             limit -=
@@ -2293,8 +2261,7 @@ class App extends React.Component {
       star.collapseTimes = fastCollapseTimes;
       star.collapseLengths = fastCollapseLengths;
     }
-
-  }
+  };
 
   getParticleRadius = (star) => {
     return (0.25 * Math.log(star.particleMass)) / Math.log(125) + 4;
@@ -2327,8 +2294,8 @@ class App extends React.Component {
 
     let completedStar = {
       color: this.getStarColor(star.starMass, 5, 0, {}, {}),
-      x:star.completedX,
-      y:star.completedY,
+      x: star.completedX,
+      y: star.completedY,
       radius: this.getCollapsedRadius(star),
     };
     let canvas = this.offscreenCanvas;
