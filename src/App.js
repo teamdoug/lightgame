@@ -2,6 +2,7 @@ import "./App.css";
 import React from "react";
 import { hsluvToHex } from "hsluv";
 
+const debug = false;
 const maxWidth = 2000;
 const maxHeight = 1500;
 const centerX = maxWidth / 2;
@@ -179,10 +180,10 @@ const stellarMilestones = [
   {
     value: 180,
     name: "Faster Auto-Collapse",
-    description: "Auto-Collapse animations take half the time",
+    description: "Auto-collapse animations take half the time",
   },
   {
-    value: 300,
+    value: 250,
     name: "Instant Auto-Collapse",
     description:
       "When a protostar auto-collapses, it no longer has any animation",
@@ -252,23 +253,19 @@ const fastestCollapseLengths = {
 
 // only setState once per gameLoop and take state as argument
 // show milestones completed on tab (or flash when completed on first run). show when upgrades available when not active (and collapse, maybe flash collapse)
-// option to disable sun light?
 // math descriptions
 // stats page (or show # of stars on stellar milestones) - instead of create protostar button
 // hotkeys
-// animate moving to the star location
 // move interstellar photons and maybe other things to top header
+// test in chrome
 
 // Lower priority
 // TODO: Animate log/other things
 // setting to limit rendered particles
-// dark starfield as background, with stars equal to number of stars created?
 // better itoa including truncing or rounding up
-// switch to hsl
 // TODO: velocity achievement for spedometer? or upgrade for acceleration/max velocity unlocks spedometer? remove spedometer?
 // TODO: achievement for avoiding particles (means don't want to auto-grant upgrades?)
 // refactor photon upgrades
-// better animation for protostar creation
 // turn completedStars into something indexed by size and counts
 
 const logTexts = {
@@ -297,6 +294,7 @@ class App extends React.Component {
     this.offscreenCanvas.width = maxWidth;
     this.offscreenCanvas.height = maxHeight;
     this.drewBackground = false;
+    this.confirmingReset = false;
     const storedState = localStorage.getItem("save");
     if (storedState) {
       this.state = JSON.parse(storedState);
@@ -308,10 +306,13 @@ class App extends React.Component {
       this.fields.push(this.getInitField(star));
     }
     this.resetLocalVars();
-    window.app = this;
+    if (debug) {
+      window.app = this;
+    }
   }
 
   reset = () => {
+    this.confirmingReset = false;
     let state = this.getInitState();
     this.setState(state, this.resizeCanvas);
     this.fields = [];
@@ -356,6 +357,8 @@ class App extends React.Component {
       tab: "upgrades",
       particleLimit: 1000,
       won: false,
+      gameLength: 0,
+      adjustingParticles: false,
       interstellar: {
         completedStars: [],
         completedConstellations: [],
@@ -517,15 +520,15 @@ class App extends React.Component {
         cost: cost,
         capped:
           star.upgrades[upgrade] >= props.levelCap &&
-          this.state.interstellar.milestonesUnlocked < 1,
+          state.interstellar.milestonesUnlocked < 1,
       };
     }
     return costs;
   };
 
-  calcInterstellarUpgradeCosts = () => {
+  calcInterstellarUpgradeCosts = (state) => {
     let costs = {};
-    let upgrades = this.state.interstellar.upgrades;
+    let upgrades = state.interstellar.upgrades;
     for (const props of interstellarUpgradeDef) {
       let cost;
       if (upgrades[props.id] >= props.scalingLevel) {
@@ -565,7 +568,7 @@ class App extends React.Component {
         console.log("Accidentally on protostar tab");
         s.headerTab = "interstellar";
       }
-      interstellarUpgradeCosts = this.calcInterstellarUpgradeCosts();
+      interstellarUpgradeCosts = this.calcInterstellarUpgradeCosts(s);
       //console.log('costs',interstellarUpgradeCosts);
     }
     let showProtostar =
@@ -673,31 +676,83 @@ class App extends React.Component {
           </div>
 
           <div className="headerButtons">
+            {this.state.adjustingParticles ? (
+              <>
+                Particle Render Limit: {this.state.particleLimit}
+                <input
+                  type="range"
+                  min="50"
+                  max="1000"
+                  value={this.state.particleLimit}
+                  onChange={(e) => {
+                    this.setState({ particleLimit: e.target.value });
+                    e.preventDefault();
+                  }}
+                />
+                <div
+                  className="button"
+                  onClick={() => this.setState({ adjustingParticles: false })}
+                >
+                  OK
+                </div>
+              </>
+            ) : (
+              <div
+                className="button"
+                onClick={() => this.setState({ adjustingParticles: true })}
+              >
+                Settings
+              </div>
+            )}
             <div className="button" onClick={this.togglePause}>
               {s.paused ? "Resume" : "Pause"}
             </div>
-
-            <div
-              className="button"
-              onClick={() => this.modifyStar(starIndex, "photons", 100)}
-            >
-              Photons
-            </div>
-            <div
-              className="button"
-              onClick={() => this.modifyStar(starIndex, "starMass", 100)}
-            >
-              Mass
-            </div>
-            <div
-              className="button"
-              onClick={() => this.preCollapseStar(starIndex)}
-            >
-              Pre-Collapse
-            </div>
-            <div className="button" onClick={this.reset}>
-              Reset
-            </div>
+            {debug && (
+              <>
+                <div
+                  className="button"
+                  onClick={() => this.modifyStar(starIndex, "photons", 100)}
+                >
+                  Photons
+                </div>
+                <div
+                  className="button"
+                  onClick={() => this.modifyStar(starIndex, "starMass", 100)}
+                >
+                  Mass
+                </div>
+                <div
+                  className="button"
+                  onClick={() => this.preCollapseStar(starIndex)}
+                >
+                  Pre-Collapse
+                </div>
+              </>
+            )}
+            {this.confirmingReset ? (
+              <>
+                <div className="button" onClick={this.reset}>
+                  Confirm Reset
+                </div>
+                <div
+                  className="button"
+                  onClick={() => {
+                    this.confirmingReset = false;
+                  }}
+                >
+                  Cancel Reset
+                </div>
+              </>
+            ) : (
+              <div
+                className="button"
+                onClick={() => {
+                  this.confirmingReset = true;
+                }}
+              >
+                Reset
+              </div>
+            )}
           </div>
         </div>
 
@@ -1132,23 +1187,23 @@ class App extends React.Component {
                           You've become a star, and yet you realize, you are
                           more than just this star. You are this universe, and
                           you want to fill it with light. By creating new
-                          protostars, you can turn each of those into their own
-                          stars.
+                          protostars, you can continue creating new stars.
                         </p>
                         <p>
                           Each star you create generates interstellar photons
-                          based on its mass. These interstellar photons can be
-                          used to buy poweful upgrades and also provide a small
-                          income to new protostars. If you were generating 1e25
-                          interstellar photons per second, that would be enough
-                          to light up the universe.
+                          based on its mass and the number of stars you've
+                          created. These interstellar photons can be used to buy
+                          powerful upgrades and also provide a small income to
+                          new protostars. Additionally, reaching stellar mass
+                          milestones and stellar count milestones will provide
+                          further boosts.
                         </p>
                         <p>
-                          This is the last commentary you're getting, but turn
-                          on "I Love Math" mode in the settings if you want
-                          better details. Good luck!
+                          If you were generating 1e25 interstellar photons per
+                          second, that would be enough to light up the universe.
                         </p>
-                        {s.interstellar.stellarMilestonesUnlocked < 2 ? (
+                        <p>Good luck!</p>
+                        {s.interstellar.stellarMilestonesUnlocked < 2 && (
                           <div
                             className={
                               "collapse button" +
@@ -1160,14 +1215,6 @@ class App extends React.Component {
                               <span className="upgradeName">
                                 Create New Protostar
                               </span>
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <p>Stats:</p>
-                            <p>
-                              Stars Created:{" "}
-                              {s.interstellar.completedStars.length}
                             </p>
                           </div>
                         )}
@@ -1309,8 +1356,12 @@ class App extends React.Component {
                     )}
                     {s.interstellarTab === "victory" && (
                       <>
-                        <p>The universe is light.</p>
-                        <p>Congratulations! Thanks for playing!</p>
+                        <h2>The universe is bright.</h2>
+                        <p>
+                          Congratulations! You won in{" "}
+                          {itoa(s.gameLength / 60, true, 1)} minutes. Thanks for
+                          playing!
+                        </p>
                         <p>
                           You can keep playing, but the star field is capped at
                           20k stars, and progress gets very slow.
@@ -1380,7 +1431,7 @@ class App extends React.Component {
   buyUpgradeInner = (name, updates, starIndex, state) => {
     let star = updates.stars[starIndex];
     let cost = this.calcUpgradeCosts(star, state)[name];
-    while (cost.cost < star.photons) {
+    while (cost.cost <= star.photons) {
       star.photons -= cost.cost;
       star.upgrades[name] += 1;
       star[name] = Math.floor(star[name] * photonUpgradeDef[name].effect);
@@ -1446,19 +1497,21 @@ class App extends React.Component {
   };
 
   collapse = (starIndex) => {
-    let stars = [...this.state.stars];
-    let star = { ...stars[starIndex] };
-    if (star.collapsing || star.milestonesUnlocked < 5) {
-      return;
-    }
-    this.prepCollapse(
-      star,
-      this.state.interstellar,
-      this.state.autocollapsersEnabled[starIndex]
-    );
-    stars[starIndex] = star;
-    this.setState({
-      stars: stars,
+    this.setState((state) => {
+      let stars = [...state.stars];
+      let star = { ...stars[starIndex] };
+      if (star.collapsing || star.milestonesUnlocked < 5) {
+        return;
+      }
+      this.prepCollapse(
+        star,
+        state.interstellar,
+        state.autocollapsersEnabled[starIndex]
+      );
+      stars[starIndex] = star;
+      return {
+        stars: stars,
+      };
     });
   };
 
@@ -1501,8 +1554,8 @@ class App extends React.Component {
     });
   };
 
-  genParticle = (star, offScreen, existing, starRadiusSq) => {
-    if (this.state.interstellar.stellarMilestonesUnlocked >= 6) {
+  genParticle = (star, offScreen, existing, starRadiusSq, interstellar) => {
+    if (interstellar && interstellar.stellarMilestonesUnlocked >= 6) {
       offScreen = false;
     }
     let pRad = star.particleRadius;
@@ -1538,7 +1591,13 @@ class App extends React.Component {
       existing.vy = this.getRandomVelocity(true);
       let distSq = existing.x * existing.x + existing.y * existing.y;
       if (distSq < 10000 || distSq < starRadiusSq) {
-        return this.genParticle(star, offScreen, existing, starRadiusSq);
+        return this.genParticle(
+          star,
+          offScreen,
+          existing,
+          starRadiusSq,
+          interstellar
+        );
       }
     }
     return existing;
@@ -1720,11 +1779,13 @@ class App extends React.Component {
         backgroundY = 0;
       }
       renderedX =
-        ((backgroundX+star.completedX) * (star.collapseFrame - collapseTimes.revel)) /
+        ((backgroundX + star.completedX) *
+          (star.collapseFrame - collapseTimes.revel)) /
         collapseLengths.background;
       console.log("cx", cx);
       renderedY =
-        ((backgroundY+star.completedY) * (star.collapseFrame - collapseTimes.revel)) /
+        ((backgroundY + star.completedY) *
+          (star.collapseFrame - collapseTimes.revel)) /
         collapseLengths.background;
     }
     ctx.arc(cx + renderedX, cy + renderedY, starRadius, 0, 2 * Math.PI);
@@ -1895,7 +1956,9 @@ class App extends React.Component {
     }
     let delta = tFrame - this.lastFrame;
     if (delta > 1000) {
-      console.log("delta too large: " + delta);
+      if (debug) {
+        console.log("delta too large: " + delta);
+      }
       delta = 1000;
     }
 
@@ -1914,7 +1977,7 @@ class App extends React.Component {
       this.update(minDelta, debugFrame);
       debugFrame = false;
     }
-    if (loopCount > 1) {
+    if (debug && loopCount > 1) {
       console.log("loops", loopCount);
     }
     this.lastFrame = tFrame - delta;
@@ -1953,6 +2016,7 @@ class App extends React.Component {
         completedGalaxies: [...s.interstellar.completedGalaxies],
       },
       won: s.won,
+      gameLength: s.gameLength + (s.won ? 0 : relDelta),
     };
     while (
       updates.interstellar.milestonesUnlocked < stellarMassMilestones.length &&
@@ -2103,7 +2167,7 @@ class App extends React.Component {
           (p.y > bottomEdge && p.vy - vy > 0) ||
           (p.y < topEdge && p.vy - vy < 0)
         ) {
-          this.genParticle(star, true, p, starRadiusSq);
+          this.genParticle(star, true, p, starRadiusSq, s.interstellar);
         }
         if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
@@ -2115,7 +2179,7 @@ class App extends React.Component {
             vy: (1200 * p.y) / dist,
           };
 
-          this.genParticle(star, true, p, starRadiusSq);
+          this.genParticle(star, true, p, starRadiusSq, s.interstellar);
           if (!updates.featureTriggers.firstPhoton) {
             updates.featureTriggers.firstPhoton = true;
             updates.logText.unshift(logTexts.firstPhoton);
@@ -2161,7 +2225,13 @@ class App extends React.Component {
       if (!star.collapsing) {
         for (let i = field.particles.length; i < star.particleCount; i++) {
           field.particles.push(
-            this.genParticle(star, true, undefined, starRadiusSq)
+            this.genParticle(
+              star,
+              true,
+              undefined,
+              starRadiusSq,
+              s.interstellar
+            )
           );
         }
         if (star.milestonesUnlocked >= 5) {
@@ -2396,6 +2466,7 @@ function itoa(num, noFrac, noFracFixed, unitSuffix = "") {
   }
   return (num / base).toFixed(3) + suffix + unitSuffix;
 }
-window.itoa = itoa;
-
+if (debug) {
+  window.itoa = itoa;
+}
 export default App;
