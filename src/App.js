@@ -165,6 +165,24 @@ const stellarMilestones = [
     name: "Auto-Collapse",
     description: "You can set protostars to auto-collapse",
   },
+  {
+    value: 30,
+    name: "Particles Spawn inside Field",
+    description:
+      "Particles now spawn inside the field instead of outside the edge",
+  },
+  {
+    value: 100,
+    name: "Buying Particle Mass Upgrade Simulates Particle Collision",
+    description:
+      "Whenever you buy a Particle Mass upgrade, the protostar grows as if a particle collided",
+  },
+  {
+    value: 200,
+    name: "Instant Auto-Collapse",
+    description:
+      "When a protostar auto-collapses, it no longer has any animation",
+  },
 ];
 
 /*
@@ -498,7 +516,7 @@ class App extends React.Component {
       s.headerTab === "protostar" || s.headerTab === "protostar2";
     const canvas = this.canvas.current;
     if (canvas !== null && showProtostar) {
-      this.drawCanvas(canvas, star, field, s.interstellar);
+        this.drawCanvas(canvas, star, field, s.interstellar, s.autocollapse[starIndex]);
     }
     let winProgress =
       (100 * Math.log(this.interstellarPhotonIncome)) / Math.log(1e20);
@@ -1331,6 +1349,9 @@ class App extends React.Component {
       if (name === "particleMass") {
         star.particleRadius =
           (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
+        if (state.interstellar.stellarMilestonesUnlocked >= 8) {
+          star.starMass += star.particleMass;
+        }
       }
       if (state.interstellar.stellarMilestonesUnlocked < 1) {
         return updates;
@@ -1442,7 +1463,10 @@ class App extends React.Component {
     });
   };
 
-  genParticle = (star, offScreen, existing) => {
+  genParticle = (star, offScreen, existing, starRadiusSq) => {
+    if (this.state.interstellar.stellarMilestonesUnlocked >= 7) {
+      offScreen = false;
+    }
     let pRad = star.particleRadius;
     if (existing === undefined) {
       existing = {};
@@ -1474,8 +1498,9 @@ class App extends React.Component {
       existing.y = getRandomInt(maxHeight) - maxHeight / 2;
       existing.vx = this.getRandomVelocity(true);
       existing.vy = this.getRandomVelocity(true);
-      if (existing.x * existing.x + existing.y * existing.y < 10000) {
-        return this.genParticle(star, offScreen, existing);
+      let distSq = existing.x * existing.x + existing.y * existing.y;
+      if (distSq < 10000 || distSq < starRadiusSq) {
+        return this.genParticle(star, offScreen, existing, starRadiusSq);
       }
     }
     return existing;
@@ -1557,7 +1582,7 @@ class App extends React.Component {
     return "rgb(" + red + "," + green + "," + blue + ")";
   }
 
-  drawCanvas = (canvas, star, field, interstellar) => {
+  drawCanvas = (canvas, star, field, interstellar, autocollapse) => {
     let pRad = star.particleRadius;
     let collapseTimes = slowCollapseTimes;
     let collapseLengths = slowCollapseLengths;
@@ -1566,12 +1591,22 @@ class App extends React.Component {
       collapseLengths = fastCollapseLengths;
     }
     let starRadius = this.getStarRadius(star, collapseTimes, collapseLengths);
+    let starRadiusSq = starRadius ** 2;
 
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
     const ctx = canvas.getContext("2d", { alpha: false });
     ctx.fillStyle = "#484848";
     ctx.fillRect(0, 0, w, h);
+    if (
+      (autocollapse.mass.enabled ||
+        autocollapse.timesMass.enabled ||
+        autocollapse.seconds.enabled) &&
+      interstellar.stellarMilestonesUnlocked >= 9 &&
+      star.lifetime < 1
+    ) {
+      return}
+    
     ctx.beginPath();
     ctx.strokeStyle = "#333";
     let gridX = star.gridX;
@@ -1826,6 +1861,7 @@ class App extends React.Component {
         (0.25 * Math.log(star.particleMass)) / Math.log(8) + 3;
       let field = this.fields[index];
       let starRadius = this.getStarRadius(star, collapseTimes, collapseLengths);
+      let starRadiusSq = starRadius ** 2;
       let [leftEdge, topEdge] = [
         -maxWidth / 2 - star.particleRadius,
         -maxHeight / 2 - star.particleRadius,
@@ -1942,7 +1978,7 @@ class App extends React.Component {
           (p.y > bottomEdge && p.vy - vy > 0) ||
           (p.y < topEdge && p.vy - vy < 0)
         ) {
-          this.genParticle(star, true, p);
+          this.genParticle(star, true, p, starRadiusSq);
         }
         if (p.x * p.x + p.y * p.y < (star.particleRadius + starRadius) ** 2) {
           distSq = p.x * p.x + p.y * p.y;
@@ -1954,7 +1990,7 @@ class App extends React.Component {
             vy: (1200 * p.y) / dist,
           };
 
-          this.genParticle(star, true, p);
+          this.genParticle(star, true, p, starRadiusSq);
           if (!updates.featureTriggers.firstPhoton) {
             updates.featureTriggers.firstPhoton = true;
             updates.logText.unshift(logTexts.firstPhoton);
@@ -1996,28 +2032,37 @@ class App extends React.Component {
       }
       if (!star.collapsing) {
         for (let i = field.particles.length; i < star.particleCount; i++) {
-          field.particles.push(this.genParticle(star, true));
+          field.particles.push(this.genParticle(star, true, undefined, starRadiusSq));
         }
         if (star.milestonesUnlocked >= 5) {
           if (s.autocollapse[index].mass.enabled) {
             let value = Number(s.autocollapse[index].mass.value);
             if (!isNaN(value) && newMass >= value) {
               star.collapsing = true;
-              star.collapseFrame = 0;          
+              star.collapseFrame = 0;
+              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+                star.collapseFrame = collapseTimes.revel;
+              }
             }
           }
           if (s.autocollapse[index].timesMass.enabled) {
             let value = Number(s.autocollapse[index].timesMass.value);
-            if (!isNaN(value) && newMass >= value*this.interstellarMass) {
+            if (!isNaN(value) && newMass >= value * this.interstellarMass) {
               star.collapsing = true;
-              star.collapseFrame = 0;          
+              star.collapseFrame = 0;
+              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+                star.collapseFrame = collapseTimes.revel;
+              }
             }
           }
           if (s.autocollapse[index].seconds.enabled) {
             let value = Number(s.autocollapse[index].seconds.value);
             if (!isNaN(value) && star.lifetime >= value) {
               star.collapsing = true;
-              star.collapseFrame = 0;          
+              star.collapseFrame = 0;
+              if (s.interstellar.stellarMilestonesUnlocked >= 9) {
+                star.collapseFrame = collapseTimes.revel;
+              }
             }
           }
         }
