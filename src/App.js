@@ -1541,33 +1541,39 @@ class App extends React.Component {
     let targetH, targetS, targetL;
     if (mass <= collapseMass) {
       let ratio = Math.log(mass) / Math.log(collapseMass);
-      targetH = 29.6 + ratio * (9.9-29.6);
+      targetH = 29.6 + ratio * (9.9 - 29.6);
       targetS = 87.1;
       targetL = 19.6;
       baseL = baseL * (1 + 0.2 * ratio);
     } else if (mass <= yellowCollapseMass) {
-      let ratio = Math.log(mass / collapseMass) / Math.log(yellowCollapseMass / collapseMass);
+      let ratio =
+        Math.log(mass / collapseMass) /
+        Math.log(yellowCollapseMass / collapseMass);
       targetH = 9.9 + ratio * (64.6 - 9.9);
       targetS = 87.1 + ratio * (90.1 - 87.1);
       targetL = 19.6 + ratio * (75.7 - 19.6);
-      baseL = baseL * (1.2 + 0.2 * ratio)
+      baseL = baseL * (1.2 + 0.2 * ratio);
     } else if (mass <= whiteCollapseMass) {
-      let ratio = Math.log(mass / yellowCollapseMass) / Math.log(whiteCollapseMass/yellowCollapseMass);
-      targetH = 64.6 + ratio * (64.6-64.6);
-      targetS = 90.1 + ratio * (0-90.1);
-      targetL = 75.7 + ratio * (95.6-75.7);
-      baseL = baseL * (1.4 + 0.2 * ratio)
-    }else if (mass <= blueCollapseMass) {
-      let ratio = Math.log(mass / whiteCollapseMass) / Math.log(blueCollapseMass/whiteCollapseMass);
+      let ratio =
+        Math.log(mass / yellowCollapseMass) /
+        Math.log(whiteCollapseMass / yellowCollapseMass);
+      targetH = 64.6 + ratio * (64.6 - 64.6);
+      targetS = 90.1 + ratio * (0 - 90.1);
+      targetL = 75.7 + ratio * (95.6 - 75.7);
+      baseL = baseL * (1.4 + 0.2 * ratio);
+    } else if (mass <= blueCollapseMass) {
+      let ratio =
+        Math.log(mass / whiteCollapseMass) /
+        Math.log(blueCollapseMass / whiteCollapseMass);
       targetH = 228.6;
-      targetS = 0 + ratio * (72.8-0);
-      targetL = 95.6 + ratio * (72.8-95.6);
-      baseL = baseL * (1.6 + 0.2 * ratio)
+      targetS = 0 + ratio * (72.8 - 0);
+      targetL = 95.6 + ratio * (72.8 - 95.6);
+      baseL = baseL * (1.6 + 0.2 * ratio);
     } else {
       targetH = 228.6;
-      targetS = 72.8
-      targetL = 72.8
-      baseL = 1.8
+      targetS = 72.8;
+      targetL = 72.8;
+      baseL = 1.8;
     }
     let intensity = colorFrame / 5;
     if (colorFrame >= 5) {
@@ -1579,7 +1585,7 @@ class App extends React.Component {
       } else if (collapseFrame < collapseTimes.shrink) {
         intensity =
           (collapseFrame - collapseTimes.recolor) / collapseLengths.shrink;
-      } else  {
+      } else {
         intensity = 1;
       }
     }
@@ -1587,7 +1593,7 @@ class App extends React.Component {
     let s = targetS;
     let l = baseL + (targetL - baseL) * intensity;
     //if (Math.random() < 0.07) {
-      //console.log("hsl", targetH, baseS, targetS, baseL, targetL);
+    //console.log("hsl", targetH, baseS, targetS, baseL, targetL);
     //}
     //console.log('hsl', targetH, s, l, hsluvToHex([targetH, s, l]))
     return hsluvToHex([targetH, s, l]);
