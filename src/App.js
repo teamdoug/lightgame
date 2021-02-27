@@ -295,7 +295,7 @@ class App extends React.Component {
     this.offscreenCanvas.height = maxHeight;
     this.drewBackground = false;
     this.confirmingReset = false;
-    const storedState = localStorage.getItem("save");
+    const storedState = localStorage.getItem("universeIsDarkSave");
     if (storedState) {
       this.state = JSON.parse(storedState);
     } else {
@@ -1868,7 +1868,7 @@ class App extends React.Component {
   };
 
   save = () => {
-    localStorage.setItem("save", JSON.stringify(this.state));
+    localStorage.setItem("universeIsDarkSave", JSON.stringify(this.state));
   };
 
   resizeCanvas = () => {
