@@ -31,7 +31,7 @@ body {
 }
 
 .headerTabs .button {
-  background-color: #333;
+  background-color: #444;
 }
 
 .header .button:not(.disabled):not(.selected):hover {
@@ -48,8 +48,9 @@ body {
 }
 
 .headerElement {
-  margin-right: 15px;
+  margin-right: 10px;
   margin-bottom: 5px;
+  display: inline-block;
 }
 
 .panelHeader {
@@ -163,7 +164,7 @@ body {
   margin-bottom: 5px;
 }
 .interstellar.upgrade.button {
-  display:block
+  display: block;
 }
 
 #collapse {
@@ -229,6 +230,7 @@ body {
   border-bottom: none;
   cursor: pointer;
   user-select: none;
+  background-color: #444;
 }
 .tab.selected {
   background-color: #222;
