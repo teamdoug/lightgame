@@ -296,6 +296,9 @@ class App extends React.Component {
     this.drewBackground = false;
     this.confirmingReset = false;
     this.width = 0;
+    this.flashingTabs = [{}, {}];
+    this.flashingHeaderTabs = {};
+    this.flashingInterstellarTabs = {};
     const storedState = localStorage.getItem("universeIsDarkSave");
     if (storedState) {
       this.state = JSON.parse(storedState);
@@ -461,13 +464,13 @@ class App extends React.Component {
   };
 
   getStarRadius = (star, collapseTimes, collapseLengths) => {
-    let logFactor = 2000000
+    let logFactor = 2000000;
     if (this.width < 500) {
       logFactor *= 2000;
-    } 
+    }
     if (this.width < 300) {
       logFactor *= 2000;
-    } 
+    }
     const defaultRadius =
       20 +
       (star.starRadiusFactor * Math.log(star.starMass / 10)) /
@@ -631,7 +634,8 @@ class App extends React.Component {
                   className={
                     "button " +
                     (s.stars.length === 0 ? "disabled " : "") +
-                    (s.headerTab === "protostar" ? "selected " : "")
+                    (s.headerTab === "protostar" ? "selected " : "") +
+                    (this.flashingHeaderTabs.protostar ? "flashing " : "")
                   }
                   onClick={() => {
                     if (s.stars.length === 0) {
@@ -641,6 +645,7 @@ class App extends React.Component {
                       { headerTab: "protostar" },
                       this.resizeCanvas
                     );
+                    this.flashingHeaderTabs.protostar = false;
                   }}
                 >
                   Protostar{secondProtostar && " #1"}
@@ -650,7 +655,8 @@ class App extends React.Component {
                     className={
                       "button " +
                       (s.stars.length === 0 ? "disabled " : "") +
-                      (s.headerTab === "protostar2" ? "selected " : "")
+                      (s.headerTab === "protostar2" ? "selected " : "") +
+                      (this.flashingHeaderTabs.protostar2 ? "flashing " : "")
                     }
                     onClick={() => {
                       if (s.stars.length === 0) {
@@ -660,6 +666,7 @@ class App extends React.Component {
                         { headerTab: "protostar2" },
                         this.resizeCanvas
                       );
+                      this.flashingHeaderTabs.protostar2 = false;
                     }}
                   >
                     Protostar #2
@@ -668,14 +675,16 @@ class App extends React.Component {
                 <div
                   className={
                     "button " +
-                    (s.headerTab === "interstellar" ? "selected " : "")
+                    (s.headerTab === "interstellar" ? "selected " : "") +
+                    (this.flashingHeaderTabs.interstellar ? "flashing " : "")
                   }
-                  onClick={() =>
+                  onClick={() => {
                     this.setState(
                       { headerTab: "interstellar" },
                       this.resizeCanvas
-                    )
-                  }
+                    );
+                    this.flashingHeaderTabs.interstellar = false;
+                  }}
                 >
                   Interstellar
                 </div>
@@ -788,18 +797,32 @@ class App extends React.Component {
                     <div className="tabs">
                       <div
                         className={
-                          "tab " + (s.tab === "upgrades" ? "selected" : "")
+                          "tab " +
+                          (s.tab === "upgrades" ? "selected " : "") +
+                          (this.flashingTabs[starIndex].upgrades
+                            ? "flashing "
+                            : "")
                         }
-                        onClick={() => this.setState({ tab: "upgrades" })}
+                        onClick={() => {
+                          this.setState({ tab: "upgrades" });
+                          this.flashingTabs[starIndex].upgrades = false;
+                        }}
                       >
                         Upgrades
                       </div>
                       {ft.unlockMass && (
                         <div
                           className={
-                            "tab " + (s.tab === "milestones" ? "selected" : "")
+                            "tab " +
+                            (s.tab === "milestones" ? "selected " : "") +
+                            (this.flashingTabs[starIndex].milestones
+                              ? "flashing "
+                              : "")
                           }
-                          onClick={() => this.setState({ tab: "milestones" })}
+                          onClick={() => {
+                            this.setState({ tab: "milestones" });
+                            this.flashingTabs[starIndex].milestones = false;
+                          }}
                         >
                           Mass Milestones
                         </div>
@@ -812,7 +835,7 @@ class App extends React.Component {
                             <div className="wrapper">
                               <div
                                 style={{
-                                  flexBasis: autobuyersEnabled ? "80%" : "100%",
+                                  flexBasis: autobuyersEnabled ? "75%" : "100%",
                                 }}
                                 className={
                                   "upgrade button" +
@@ -877,7 +900,7 @@ class App extends React.Component {
                                 <div
                                   style={{
                                     flexBasis: autobuyersEnabled
-                                      ? "80%"
+                                      ? "75%"
                                       : "100%",
                                   }}
                                   className={
@@ -944,7 +967,7 @@ class App extends React.Component {
                                 <div
                                   style={{
                                     flexBasis: autobuyersEnabled
-                                      ? "80%"
+                                      ? "75%"
                                       : "100%",
                                   }}
                                   className={
@@ -1142,22 +1165,30 @@ class App extends React.Component {
                     <div
                       className={
                         "tab " +
-                        (s.interstellarTab === "upgrades" ? "selected" : "")
+                        (s.interstellarTab === "upgrades" ? "selected" : "") +
+                        (this.flashingInterstellarTabs.upgrades
+                          ? "flashing "
+                          : "")
                       }
-                      onClick={() =>
-                        this.setState({ interstellarTab: "upgrades" })
-                      }
+                      onClick={() => {
+                        this.setState({ interstellarTab: "upgrades" });
+                        this.flashingInterstellarTabs.upgrades = false;
+                      }}
                     >
                       Upgrades
                     </div>
                     <div
                       className={
                         "tab " +
-                        (s.interstellarTab === "milestones" ? "selected" : "")
+                        (s.interstellarTab === "milestones" ? "selected" : "") +
+                        (this.flashingInterstellarTabs.milestones
+                          ? "flashing "
+                          : "")
                       }
-                      onClick={() =>
-                        this.setState({ interstellarTab: "milestones" })
-                      }
+                      onClick={() => {
+                        this.setState({ interstellarTab: "milestones" });
+                        this.flashingInterstellarTabs.milestones = false;
+                      }}
                     >
                       Mass Milestones
                     </div>
@@ -1166,11 +1197,15 @@ class App extends React.Component {
                         "tab " +
                         (s.interstellarTab === "stellarMilestones"
                           ? "selected"
+                          : "") +
+                        (this.flashingInterstellarTabs.stellarMilestones
+                          ? "flashing "
                           : "")
                       }
-                      onClick={() =>
-                        this.setState({ interstellarTab: "stellarMilestones" })
-                      }
+                      onClick={() => {
+                        this.setState({ interstellarTab: "stellarMilestones" });
+                        this.flashingInterstellarTabs.stellarMilestones = false;
+                      }}
                     >
                       Stellar Milestones
                     </div>
@@ -1645,8 +1680,10 @@ class App extends React.Component {
     if (e.touches.length > 0) {
       var rect = this.canvas.current.getBoundingClientRect();
       this.mouseClicked = true;
-      this.mouseX = e.touches[0].clientX - rect.left - this.canvas.current.width / 2;
-      this.mouseY = e.touches[0].clientY - rect.top - this.canvas.current.height / 2;
+      this.mouseX =
+        e.touches[0].clientX - rect.left - this.canvas.current.width / 2;
+      this.mouseY =
+        e.touches[0].clientY - rect.top - this.canvas.current.height / 2;
     } else {
       this.mouseClicked = false;
     }
@@ -2050,6 +2087,9 @@ class App extends React.Component {
       },
       won: s.won,
       gameLength: s.gameLength + (s.won ? 0 : relDelta),
+      headerTab: s.headerTab,
+      tab: s.tab,
+      interstellarTab: s.interstellarTab,
     };
     while (
       updates.interstellar.milestonesUnlocked < stellarMassMilestones.length &&
@@ -2057,6 +2097,12 @@ class App extends React.Component {
         stellarMassMilestones[updates.interstellar.milestonesUnlocked].value
     ) {
       updates.interstellar.milestonesUnlocked++;
+      if (s.headerTab !== "interstellar") {
+        this.flashingHeaderTabs.interstellar = true;
+      }
+      if (s.interstellarTab !== "milestones") {
+        this.flashingInterstellarTabs.milestones = true;
+      }
       if (
         updates.interstellar.milestonesUnlocked === 2 &&
         updates.interstellar.stellarMilestonesUnlocked >= 2
@@ -2066,9 +2112,29 @@ class App extends React.Component {
         updates.stars.push(star);
       }
     }
+    let oldISPhotons = updates.interstellar.photons;
+    let newISPhotons =
+      oldISPhotons + s.interstellar.interstellarPhotonIncome * relDelta;
+    let isUpgradeCosts = this.calcInterstellarUpgradeCosts(updates);
+    if (
+      (newISPhotons >= isUpgradeCosts.bonusParticlePhotons.cost &&
+        oldISPhotons < isUpgradeCosts.bonusParticlePhotons.cost) ||
+      (!isUpgradeCosts.permanentMilestones.capped &&
+        newISPhotons >= isUpgradeCosts.permanentMilestones.cost &&
+        oldISPhotons < isUpgradeCosts.permanentMilestones.cost) ||
+      (updates.interstellar.milestonesUnlocked >= 3 &&
+        newISPhotons >= isUpgradeCosts.bonusParticleMass.cost &&
+        oldISPhotons < isUpgradeCosts.bonusParticleMass.cost)
+    ) {
+      if (s.headerTab !== "interstellar") {
+        this.flashingHeaderTabs.interstellar = true;
+      }
+      if (s.interstellarTab !== "upgrades") {
+        this.flashingInterstellarTabs.upgrades = true;
+      }
+    }
 
-    updates.interstellar.photons +=
-      s.interstellar.interstellarPhotonIncome * relDelta;
+    updates.interstellar.photons = newISPhotons;
     const dragConstant = 0.0005;
     let visibleStarIndex = -1;
     if (s.headerTab === "protostar") {
@@ -2252,6 +2318,13 @@ class App extends React.Component {
             !updates.featureTriggers.unlockCollapse
           ) {
             updates.featureTriggers.unlockCollapse = true;
+            if (s.tab !== "upgrades") {
+              this.flashingTabs[index].upgrades = true;
+            }
+          } else if (!updates.featureTriggers.unlockCollapse) {
+            if (s.tab !== "milestones") {
+              this.flashingTabs[index].milestones = true;
+            }
           }
         }
       }
@@ -2317,6 +2390,30 @@ class App extends React.Component {
         vy: vy,
         velocity: velocity,
       };
+      let upgradeCosts = this.calcUpgradeCosts(star, updates);
+      if (
+        (!upgradeCosts.particlePhotons.capped &&
+          !s.autobuyersEnabled[index].particlePhotons &&
+          newPhotons >= upgradeCosts.particlePhotons.cost &&
+          star.photons < upgradeCosts.particlePhotons.cost) ||
+        (!upgradeCosts.particleCount.capped &&
+          !s.autobuyersEnabled[index].particleCount &&
+          newPhotons >= upgradeCosts.particleCount.cost &&
+          star.photons < upgradeCosts.particleCount.cost) ||
+        (!upgradeCosts.particleMass.capped &&
+          !s.autobuyersEnabled[index].particleMass &&
+          newPhotons >= upgradeCosts.particleMass.cost &&
+          star.photons < upgradeCosts.particleMass.cost)
+      ) {
+        if (index === 0 && s.headerTab !== "protostar") {
+          this.flashingHeaderTabs.protostar = true;
+        } else if (index === 1 && s.headerTab !== "protostar2") {
+          this.flashingHeaderTabs.protostar2 = true;
+        }
+        if (s.tab !== "upgrades") {
+          this.flashingTabs[index].upgrades = true;
+        }
+      }
 
       if (!collapsed) {
         updates.stars[index] = {
@@ -2369,13 +2466,13 @@ class App extends React.Component {
   };
 
   getParticleRadius = (star) => {
-    let logFactor = 125
+    let logFactor = 125;
     if (this.width < 500) {
       logFactor *= 5;
-    } 
+    }
     if (this.width < 300) {
       logFactor *= 5;
-    } 
+    }
     return (0.25 * Math.log(star.particleMass)) / Math.log(logFactor) + 4;
   };
 
@@ -2447,6 +2544,12 @@ class App extends React.Component {
         stellarMilestones[updates.interstellar.stellarMilestonesUnlocked].value
     ) {
       updates.interstellar.stellarMilestonesUnlocked++;
+      if (updates.headerTab !== "interstellar") {
+        this.flashingHeaderTabs.interstellar = true;
+      }
+      if (updates.interstellarTab !== "stellarMilestones") {
+        this.flashingInterstellarTabs.stellarMilestones = true;
+      }
       if (
         updates.interstellar.milestonesUnlocked >= 2 &&
         updates.stars.length === 1
@@ -2458,12 +2561,14 @@ class App extends React.Component {
     }
     if (updates.interstellar.stellarMilestonesUnlocked < 2) {
       updates.headerTab = "interstellar";
+      this.flashingHeaderTabs.interstellar = false;
       star.collapsed = true;
       this.fields.splice(starIndex, 1);
       stars.splice(starIndex, 1);
       forceResize = true;
     } else {
       updates.tab = "upgrades";
+      this.flashingTabs[starIndex] = {};
       stars[starIndex] = this.getInitStar(updates);
       this.fields[starIndex] = this.getInitField(stars[starIndex]);
     }

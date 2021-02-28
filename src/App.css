@@ -79,14 +79,19 @@ body {
   max-height: calc(100vh - 117px);
   position: relative;
   overflow: scroll;
+
 }
 
 @media only screen and (min-height: 500px) {
-#log {
-  position: absolute;
-  bottom: 0;
-  height: 150px;
-}
+  #log {
+    position: absolute;
+    bottom: 0;
+    height: 150px;
+  }
+  #leftPanel {
+    overflow: hidden;
+
+  }
 }
 
 #log {
@@ -242,4 +247,17 @@ body {
 }
 .tab:not(.selected):hover {
   background-color: #666;
+}
+
+.flashing {
+  animation: flash 3s linear infinite;
+}
+
+@keyframes flash {
+  33% {
+    background-color: #151;
+  }
+  66% {
+    background-color: #151;
+  }
 }
