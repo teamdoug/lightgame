@@ -77,16 +77,20 @@ body {
   min-height: calc(100vh - 117px);
   max-height: calc(100vh - 117px);
   position: relative;
-  overflow: hidden;
+  overflow: scroll;
 }
 
+@media only screen and (min-height: 500px) {
 #log {
   position: absolute;
   bottom: 0;
   height: 150px;
-  margin-right: 5px;
+}
 }
 
+#log {
+  margin-right: 5px;
+}
 #log p {
   margin: 3px 0px;
 }

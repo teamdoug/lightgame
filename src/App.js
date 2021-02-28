@@ -295,6 +295,7 @@ class App extends React.Component {
     this.offscreenCanvas.height = maxHeight;
     this.drewBackground = false;
     this.confirmingReset = false;
+    this.width = 0;
     const storedState = localStorage.getItem("universeIsDarkSave");
     if (storedState) {
       this.state = JSON.parse(storedState);
@@ -460,10 +461,17 @@ class App extends React.Component {
   };
 
   getStarRadius = (star, collapseTimes, collapseLengths) => {
+    let logFactor = 2000000
+    if (this.width < 500) {
+      logFactor *= 2000;
+    } 
+    if (this.width < 300) {
+      logFactor *= 2000;
+    } 
     const defaultRadius =
       20 +
       (star.starRadiusFactor * Math.log(star.starMass / 10)) /
-        Math.log(2000000);
+        Math.log(logFactor);
     if (!star.collapsing || star.collapseFrame < collapseTimes.recolor) {
       return defaultRadius;
     }
@@ -1382,6 +1390,10 @@ class App extends React.Component {
                 onMouseDown={this.mouseMove}
                 onMouseUp={this.mouseMove}
                 onMouseLeave={this.mouseMove}
+                onTouchStart={this.touchMove}
+                onTouchMove={this.touchMove}
+                onTouchEnd={this.touchMove}
+                onTouchCancel={this.touchMove}
               ></canvas>
             )}
             {s.headerTab === "interstellar" && (
@@ -1616,6 +1628,24 @@ class App extends React.Component {
       this.mouseClicked = true;
       this.mouseX = e.clientX - rect.left - this.canvas.current.width / 2;
       this.mouseY = e.clientY - rect.top - this.canvas.current.height / 2;
+    } else {
+      this.mouseClicked = false;
+    }
+  };
+
+  touchMove = (e) => {
+    if (!this.canvas.current) {
+      return;
+    }
+    if (e.type === "touchcancel" || e.type === "touchend") {
+      this.mouseClicked = false;
+      return;
+    }
+    if (e.touches.length > 0) {
+      var rect = this.canvas.current.getBoundingClientRect();
+      this.mouseClicked = true;
+      this.mouseX = e.touches[0].clientX - rect.left - this.canvas.current.width / 2;
+      this.mouseY = e.touches[0].clientY - rect.top - this.canvas.current.height / 2;
     } else {
       this.mouseClicked = false;
     }
@@ -1891,6 +1921,7 @@ class App extends React.Component {
       } else {
         this.canvas.current.height = this.canvas.current.offsetHeight;
       }
+      this.width = this.canvas.current.width;
     }
 
     if (
@@ -1911,6 +1942,7 @@ class App extends React.Component {
       } else {
         this.backgroundCanvas.current.height = this.backgroundCanvas.current.offsetHeight;
       }
+      this.width = this.backgroundCanvas.current.width;
     }
     if (this.state.paused) {
       this.forceUpdate();
@@ -2314,13 +2346,15 @@ class App extends React.Component {
     star.collapseFrame = 0;
     let minR = 0;
     if (interstellar.collapseCount < 20) {
-      minR = 50;
+      minR = 20;
     }
-    let maxR = 300 + interstellar.collapseCount;
-    if (maxR > 400) {
-      maxR = 400 * (maxR / 400) ** 0.4;
+    let startR = Math.min(this.width / 4, 300);
+    let scaleR = Math.min(this.width / 3, 400);
+    let maxR = startR + interstellar.collapseCount;
+    if (maxR > scaleR) {
+      maxR = scaleR * (maxR / scaleR) ** 0.4;
     }
-    let r = minR + getRandomInt(300 + interstellar.collapseCount);
+    let r = minR + getRandomInt(maxR + interstellar.collapseCount);
     let theta = Math.random() * 2 * Math.PI;
     star.completedX = r * Math.cos(theta);
     star.completedY = r * Math.sin(theta);
@@ -2334,7 +2368,14 @@ class App extends React.Component {
   };
 
   getParticleRadius = (star) => {
-    return (0.25 * Math.log(star.particleMass)) / Math.log(125) + 4;
+    let logFactor = 125
+    if (this.width < 500) {
+      logFactor *= 5;
+    } 
+    if (this.width < 300) {
+      logFactor *= 5;
+    } 
+    return (0.25 * Math.log(star.particleMass)) / Math.log(logFactor) + 4;
   };
 
   createProtostar = () => {
