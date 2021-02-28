@@ -79,7 +79,6 @@ body {
   max-height: calc(100vh - 117px);
   position: relative;
   overflow: scroll;
-
 }
 
 @media only screen and (min-height: 500px) {
@@ -90,7 +89,6 @@ body {
   }
   #leftPanel {
     overflow: hidden;
-
   }
 }
 
