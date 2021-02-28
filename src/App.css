@@ -3,6 +3,7 @@ body {
   background-color: #111;
   color: #ddd;
   overflow: hidden;
+  user-select: none;
 }
 
 #verticalFlex {

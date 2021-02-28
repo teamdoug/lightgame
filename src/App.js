@@ -325,7 +325,7 @@ class App extends React.Component {
       let [w, h] = [canvas.width, canvas.height];
       let [cx, cy] = [w / 2, h / 2];
       const ctx = canvas.getContext("2d", { alpha: false });
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = "#040612";
       ctx.fillRect(0, 0, w, h);
       for (const compStar of state.interstellar.completedStars) {
         ctx.fillStyle = compStar.color;
@@ -525,7 +525,7 @@ class App extends React.Component {
           props.initialCost * props.costMultiplier ** star.upgrades[upgrade];
       }
       costs[upgrade] = {
-        cost: cost,
+        cost: Math.round(cost),
         capped:
           star.upgrades[upgrade] >= props.levelCap &&
           state.interstellar.milestonesUnlocked < 1,
@@ -549,7 +549,7 @@ class App extends React.Component {
         cost = props.initialCost * props.costMultiplier ** upgrades[props.id];
       }
       costs[props.id] = {
-        cost: cost,
+        cost: Math.round(cost),
         capped: upgrades[props.id] >= props.levelCap,
       };
     }
@@ -1637,6 +1637,7 @@ class App extends React.Component {
     if (!this.canvas.current) {
       return;
     }
+
     if (e.type === "touchcancel" || e.type === "touchend") {
       this.mouseClicked = false;
       return;
@@ -1744,7 +1745,7 @@ class App extends React.Component {
     let [w, h] = [canvas.width, canvas.height];
     let [cx, cy] = [w / 2, h / 2];
     const ctx = canvas.getContext("2d", { alpha: false });
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#040612";
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(
       offscreenCanvas,
@@ -1820,7 +1821,7 @@ class App extends React.Component {
     }
     ctx.arc(cx + renderedX, cy + renderedY, starRadius, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.fillStyle = "#23170e";
+    ctx.fillStyle = "#281b11";
     let pCount = 0;
     let ringSize = 0,
       ringSizeSq = 0;
@@ -1958,7 +1959,7 @@ class App extends React.Component {
       let [w, h] = [canvas.width, canvas.height];
       let [cx, cy] = [w / 2, h / 2];
       const ctx = canvas.getContext("2d", { alpha: false });
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = "#040612";
       ctx.fillRect(0, 0, w, h);
       for (const compStar of this.state.interstellar.completedStars) {
         ctx.fillStyle = compStar.color;
