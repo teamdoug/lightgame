@@ -1637,14 +1637,10 @@ class App extends React.Component {
       existing.vx = this.getRandomVelocity(true);
       existing.vy = this.getRandomVelocity(true);
       let distSq = existing.x * existing.x + existing.y * existing.y;
-      if (distSq < 10000 || distSq < starRadiusSq) {
-        return this.genParticle(
-          star,
-          offScreen,
-          existing,
-          starRadiusSq,
-          interstellar
-        );
+      while (distSq < 10000 || distSq < starRadiusSq) {
+        existing.x = existing.x ? 1.05*existing.x : existing.x + 1;
+        existing.y = existing.y ? 1.05*existing.y : existing.y + 1;
+        distSq = existing.x * existing.x + existing.y * existing.y;
       }
     }
     return existing;
